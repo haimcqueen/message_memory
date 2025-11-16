@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Supabase Storage
     media_bucket_name: str = Field(default="whatsapp-media")
 
+    # n8n Webhook
+    n8n_webhook_url: str = Field(..., alias="N8N_WEBHOOK_URL")
+    n8n_webhook_api_key: str = Field(..., alias="N8N_WEBHOOK_API_KEY")
+
     class Config:
         env_file = ".env"
         case_sensitive = False

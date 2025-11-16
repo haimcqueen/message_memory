@@ -15,6 +15,7 @@ dependencies = [
     "redis>=7.0.1",
     "requests>=2.32.5",
     "rq>=2.6.0",
+    "rq-scheduler>=0.13.1",
     "supabase>=2.24.0",
     "tenacity>=9.1.2",
     "uvicorn>=0.38.0",

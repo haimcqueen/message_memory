@@ -200,6 +200,20 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         # Insert into database
         insert_message(db_message)
 
+        # Add to n8n batch if this is a user message
+        if not from_me:  # Only batch user messages
+            try:
+                from workers.batching import add_message_to_batch
+                add_message_to_batch(
+                    chat_id=chat_id,
+                    content=content or "[No content]",
+                    user_id=user_id,
+                    session_id=session_id
+                )
+            except Exception as e:
+                # Don't let batching failures block message processing
+                logger.error(f"Failed to add message to n8n batch: {e}")
+
         # If processing failed (no media_url for media types), create a processing job
         if message_type in ["voice", "image", "video", "document", "audio"] and not media_url:
             logger.info(f"Creating processing job for failed message {message_id}")
