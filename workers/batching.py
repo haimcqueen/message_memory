@@ -40,6 +40,7 @@ def add_message_to_batch(
         user_id: User ID from database
         session_id: Session ID from database (not used, kept for backward compatibility)
     """
+    logger.info(f"add_message_to_batch called for chat_id: {chat_id}, user_id: {user_id}")
     redis_conn = get_redis_connection()
     count_key = f"{BATCH_COUNT_PREFIX}{chat_id}"
     user_id_key = f"{BATCH_USER_ID_PREFIX}{chat_id}"

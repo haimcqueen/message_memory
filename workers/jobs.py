@@ -202,6 +202,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
         # Add to n8n batch if this is a user message
         if not from_me:  # Only batch user messages
+            logger.info(f"User message detected (from_me={from_me}), adding to n8n batch")
             try:
                 from workers.batching import add_message_to_batch
                 add_message_to_batch(
