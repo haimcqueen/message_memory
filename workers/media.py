@@ -13,6 +13,7 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type
 )
+from prompts.pdf_parsing import get_pdf_parsing_messages
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ def upload_to_supabase_storage(
 )
 def parse_pdf_with_openai(file_content: bytes, filename: str = "document.pdf") -> str:
     """
-    Parse PDF content using OpenAI file input API with visual descriptions.
+    Parse PDF content using OpenAI Files API + Chat Completions with visual descriptions.
 
     Args:
         file_content: PDF file bytes
@@ -163,25 +164,30 @@ def parse_pdf_with_openai(file_content: bytes, filename: str = "document.pdf") -
     logger.info(f"Parsing PDF with OpenAI ({len(file_content)} bytes, filename: {filename})")
 
     try:
-        # Base64 encode the PDF file
-        base64_string = base64.b64encode(file_content).decode('utf-8')
+        # Upload file to OpenAI Files API first
+        logger.info("Uploading PDF to OpenAI Files API...")
+        file_response = openai_client.files.create(
+            file=(filename, file_content, "application/pdf"),
+            purpose="assistants"
+        )
+        file_id = file_response.id
+        logger.info(f"PDF uploaded with file_id: {file_id}")
 
-        # Use OpenAI's proper file input format
+        # Use the file in Chat Completions API
         completion = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.openai_pdf_model,
             messages=[{
                 "role": "user",
                 "content": [
                     {
-                        "type": "file",
-                        "file": {
-                            "filename": filename,
-                            "file_data": f"data:application/pdf;base64,{base64_string}"
-                        }
+                        "type": "text",
+                        "text": get_pdf_parsing_messages(filename, "")[0]["content"][0]["text"]  # Get prompt from helper
                     },
                     {
-                        "type": "text",
-                        "text": "Extract all text from this PDF document. For each page, describe any visual elements like graphs, charts, diagrams, or images that you see, then provide the text content. Preserve structure and formatting."
+                        "type": "file",
+                        "file": {
+                            "file_id": file_id
+                        }
                     }
                 ]
             }]
@@ -189,6 +195,13 @@ def parse_pdf_with_openai(file_content: bytes, filename: str = "document.pdf") -
 
         extracted_content = completion.choices[0].message.content
         logger.info(f"PDF parsing completed: {len(extracted_content)} characters extracted")
+
+        # Clean up: delete the uploaded file
+        try:
+            openai_client.files.delete(file_id)
+            logger.info(f"Deleted file {file_id} from OpenAI")
+        except Exception as del_error:
+            logger.warning(f"Failed to delete file {file_id}: {del_error}")
 
         return extracted_content if extracted_content else "[PDF - no content extracted]"
 

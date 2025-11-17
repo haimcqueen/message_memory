@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = Field(..., alias="OPENAI_API_KEY")
 
+    # OpenAI Models
+    openai_pdf_model: str = Field(default="gpt-5.1-2025-11-13", alias="OPENAI_PDF_MODEL")
+    openai_session_model: str = Field(default="gpt-4o-mini", alias="OPENAI_SESSION_MODEL")
+    openai_transcription_model: str = Field(default="whisper-1", alias="OPENAI_TRANSCRIPTION_MODEL")
+
     # Redis
     redis_url: str = Field(default="redis://localhost:6379", alias="REDIS_URL")
 

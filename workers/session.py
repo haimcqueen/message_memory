@@ -11,6 +11,7 @@ from tenacity import (
 from openai import OpenAI, APIError
 from utils.config import settings
 from utils.supabase_client import get_supabase
+from prompts.session_detection import get_session_detection_messages
 
 logger = logging.getLogger(__name__)
 
@@ -65,38 +66,11 @@ def call_llm_for_session_detection(
     Returns:
         True if same session, False if new session needed
     """
-    # Format recent messages for the prompt (reverse to show chronological order)
-    conversation_context = "\n".join([
-        f"- [{msg['origin']}]: {msg['content'][:100]}"
-        for msg in reversed(recent_messages)  # Show oldest to newest
-    ])
-
-    prompt = f"""You are analyzing a WhatsApp conversation to determine if a new message continues the same conversation topic or starts a new one.
-
-Previous messages in this chat:
-{conversation_context}
-
-New message:
-- {new_message_content[:100]}
-
-Question: Does this new message continue the same conversation topic as the previous messages?
-
-Answer with ONLY "yes" or "no"."""
-
     logger.info("Calling LLM for session detection")
 
     response = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a conversation analysis assistant. Answer only with 'yes' or 'no'."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
+        model=settings.openai_session_model,
+        messages=get_session_detection_messages(recent_messages, new_message_content),
         temperature=0.0,
         max_tokens=10
     )
