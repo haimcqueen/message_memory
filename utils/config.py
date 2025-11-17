@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # OpenAI Models
     openai_pdf_model: str = Field(default="gpt-5.1-2025-11-13", alias="OPENAI_PDF_MODEL")
-    openai_session_model: str = Field(default="gpt-4o-mini", alias="OPENAI_SESSION_MODEL")
+    openai_session_model: str = Field(default="gpt-5-mini-2025-08-07", alias="OPENAI_SESSION_MODEL")
     openai_transcription_model: str = Field(default="whisper-1", alias="OPENAI_TRANSCRIPTION_MODEL")
 
     # Redis
@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # n8n Webhook
     n8n_webhook_url: str = Field(..., alias="N8N_WEBHOOK_URL")
     n8n_webhook_api_key: str = Field(..., alias="N8N_WEBHOOK_API_KEY")
+    n8n_batch_delay_seconds: int = Field(default=60, alias="N8N_BATCH_DELAY_SECONDS")
 
     class Config:
         env_file = ".env"

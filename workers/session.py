@@ -72,7 +72,7 @@ def call_llm_for_session_detection(
         model=settings.openai_session_model,
         messages=get_session_detection_messages(recent_messages, new_message_content),
         temperature=0.0,
-        max_tokens=10
+        max_completion_tokens=10
     )
 
     answer = response.choices[0].message.content.strip().lower()
