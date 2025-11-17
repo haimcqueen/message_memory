@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     session_detection_temperature: float = Field(default=0.0, alias="SESSION_DETECTION_TEMPERATURE")
     session_detection_max_tokens: int = Field(default=10, alias="SESSION_DETECTION_MAX_TOKENS")
 
+    # Presence Configuration
+    presence_wait_min_seconds: int = Field(default=2, alias="PRESENCE_WAIT_MIN_SECONDS")
+    presence_wait_max_seconds: int = Field(default=4, alias="PRESENCE_WAIT_MAX_SECONDS")
+    presence_typing_min_seconds: int = Field(default=13, alias="PRESENCE_TYPING_MIN_SECONDS")
+    presence_typing_max_seconds: int = Field(default=18, alias="PRESENCE_TYPING_MAX_SECONDS")
+
     class Config:
         env_file = ".env"
         case_sensitive = False

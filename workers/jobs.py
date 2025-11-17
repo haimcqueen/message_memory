@@ -7,6 +7,7 @@ from workers.database import insert_message, create_processing_job, get_user_id_
 from workers.transcription import transcribe_voice_message
 from workers.session import detect_session
 from workers.media import process_media_message
+from workers.presence import send_presence
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,13 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
         # Determine origin
         origin = "agent" if from_me else "user"
+
+        # Send typing presence for user messages
+        if origin == "user":
+            try:
+                send_presence(chat_id, presence="typing")
+            except Exception as e:
+                logger.warning(f"Failed to send typing presence: {str(e)}")
 
         # Extract message content based on type
         content = None
