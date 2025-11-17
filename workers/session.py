@@ -19,17 +19,20 @@ logger = logging.getLogger(__name__)
 openai_client = OpenAI(api_key=settings.openai_api_key)
 
 
-def get_recent_messages(chat_id: str, limit: int = 20) -> list[dict]:
+def get_recent_messages(chat_id: str, limit: int = None) -> list[dict]:
     """
     Fetch recent messages for a chat from Supabase.
 
     Args:
         chat_id: WhatsApp chat ID
-        limit: Number of recent messages to fetch
+        limit: Number of recent messages to fetch (defaults to config setting)
 
     Returns:
         List of message dictionaries
     """
+    if limit is None:
+        limit = settings.session_recent_messages_limit
+
     supabase = get_supabase()
 
     try:
@@ -71,8 +74,8 @@ def call_llm_for_session_detection(
     response = openai_client.chat.completions.create(
         model=settings.openai_session_model,
         messages=get_session_detection_messages(recent_messages, new_message_content),
-        temperature=0.0,
-        max_completion_tokens=10
+        temperature=settings.session_detection_temperature,
+        max_completion_tokens=settings.session_detection_max_tokens
     )
 
     answer = response.choices[0].message.content.strip().lower()
@@ -102,8 +105,8 @@ def detect_session(chat_id: str, message_content: str, origin: str) -> str:
     """
     logger.info(f"Detecting session for chat {chat_id}")
 
-    # Fetch recent messages
-    recent_messages = get_recent_messages(chat_id, limit=20)
+    # Fetch recent messages (uses settings.session_recent_messages_limit)
+    recent_messages = get_recent_messages(chat_id)
 
     # Case 1: No previous messages - create new session
     if not recent_messages:
@@ -127,9 +130,9 @@ def detect_session(chat_id: str, message_content: str, origin: str) -> str:
 
     time_diff = datetime.now(latest_datetime.tzinfo) - latest_datetime
 
-    # Case 2: Last message was >24 hours ago - create new session
-    if time_diff > timedelta(hours=24):
-        logger.info(f"Last message was {time_diff} ago - creating new session")
+    # Case 2: Last message was >session_timeout_hours ago - create new session
+    if time_diff > timedelta(hours=settings.session_timeout_hours):
+        logger.info(f"Last message was {time_diff} ago (timeout: {settings.session_timeout_hours}h) - creating new session")
         return str(uuid.uuid4())
 
     # Case 3: Only agent messages so far - continue same session
