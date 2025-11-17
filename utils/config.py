@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     n8n_webhook_api_key: str = Field(..., alias="N8N_WEBHOOK_API_KEY")
     n8n_batch_delay_seconds: int = Field(default=60, alias="N8N_BATCH_DELAY_SECONDS")
 
+    # Presence Configuration
+    presence_wait_min_seconds: int = Field(default=2, alias="PRESENCE_WAIT_MIN_SECONDS")
+    presence_wait_max_seconds: int = Field(default=4, alias="PRESENCE_WAIT_MAX_SECONDS")
+    presence_typing_min_seconds: int = Field(default=13, alias="PRESENCE_TYPING_MIN_SECONDS")
+    presence_typing_max_seconds: int = Field(default=18, alias="PRESENCE_TYPING_MAX_SECONDS")
+
     class Config:
         env_file = ".env"
         case_sensitive = False
