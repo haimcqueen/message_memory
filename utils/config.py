@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     n8n_webhook_api_key: str = Field(..., alias="N8N_WEBHOOK_API_KEY")
     n8n_batch_delay_seconds: int = Field(default=60, alias="N8N_BATCH_DELAY_SECONDS")
 
+    # Session Detection Configuration
+    session_timeout_hours: int = Field(default=24, alias="SESSION_TIMEOUT_HOURS")
+    session_recent_messages_limit: int = Field(default=20, alias="SESSION_RECENT_MESSAGES_LIMIT")
+    session_detection_temperature: float = Field(default=0.0, alias="SESSION_DETECTION_TEMPERATURE")
+    session_detection_max_tokens: int = Field(default=10, alias="SESSION_DETECTION_MAX_TOKENS")
+
     class Config:
         env_file = ".env"
         case_sensitive = False
