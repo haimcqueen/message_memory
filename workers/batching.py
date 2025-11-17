@@ -14,9 +14,6 @@ BATCH_COUNT_PREFIX = "n8n_count:"
 BATCH_USER_ID_PREFIX = "n8n_user:"
 BATCH_JOB_ID_PREFIX = "n8n_job:"
 
-# Batch delay in seconds (1 minute)
-BATCH_DELAY_SECONDS = 60
-
 
 def get_redis_connection() -> Redis:
     """Get Redis connection."""
@@ -69,7 +66,7 @@ def add_message_to_batch(
         # Schedule new batch processing job
         queue = Queue("whatsapp-messages", connection=redis_conn)
         job = queue.enqueue_in(
-            timedelta(seconds=BATCH_DELAY_SECONDS),
+            timedelta(seconds=settings.n8n_batch_delay_seconds),
             process_and_forward_batch,
             chat_id,
             job_timeout="5m"

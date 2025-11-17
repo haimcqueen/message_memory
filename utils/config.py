@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # n8n Webhook
     n8n_webhook_url: str = Field(..., alias="N8N_WEBHOOK_URL")
     n8n_webhook_api_key: str = Field(..., alias="N8N_WEBHOOK_API_KEY")
+    n8n_batch_delay_seconds: int = Field(default=60, alias="N8N_BATCH_DELAY_SECONDS")
 
     class Config:
         env_file = ".env"
