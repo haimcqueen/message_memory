@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # OpenAI Models
     openai_pdf_model: str = Field(default="gpt-5.1-2025-11-13", alias="OPENAI_PDF_MODEL")
-    openai_session_model: str = Field(default="gpt-4o-mini", alias="OPENAI_SESSION_MODEL")
+    openai_session_model: str = Field(default="gpt-5-mini-2025-08-07", alias="OPENAI_SESSION_MODEL")
     openai_transcription_model: str = Field(default="whisper-1", alias="OPENAI_TRANSCRIPTION_MODEL")
 
     # Redis
