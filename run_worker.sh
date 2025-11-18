@@ -8,4 +8,9 @@ echo ""
 # Unset any environment variables that might override .env file
 unset OPENAI_API_KEY
 
-OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES uv run rq worker whatsapp-messages --url redis://localhost:6379 --with-scheduler
+# Use REDIS_URL from environment, fallback to localhost for development
+REDIS_URL=${REDIS_URL:-redis://localhost:6379}
+
+echo "Connecting to Redis at: $REDIS_URL"
+
+OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES uv run rq worker whatsapp-messages --url "$REDIS_URL" --with-scheduler
