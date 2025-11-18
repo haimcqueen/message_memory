@@ -117,6 +117,86 @@ async def debug_webhook(request: Request):
     )
 
 
+@app.post("/webhook/n8n-error")
+async def n8n_error_webhook(
+    error_data: "N8nErrorWebhook",
+    authorization: str = Header(None)
+):
+    """
+    Receive n8n workflow error notifications and notify user with retry.
+
+    Args:
+        error_data: Error information from n8n
+        authorization: Bearer token for authentication
+    """
+    from app.models import N8nErrorWebhook
+
+    # Verify n8n token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+    token = authorization.replace("Bearer ", "")
+    if token != settings.n8n_webhook_api_key:
+        raise HTTPException(status_code=403, detail="Invalid n8n API key")
+
+    logger.info(f"Received n8n error for user_id: {error_data.user_id}")
+    logger.error(f"n8n error message: {error_data.error_message}")
+
+    # Get chat_id if not provided
+    chat_id = error_data.chat_id
+    if not chat_id:
+        from workers.database import get_chat_id_by_user_id
+        try:
+            chat_id = get_chat_id_by_user_id(error_data.user_id)
+            if not chat_id:
+                logger.error(f"No chat_id found for user_id: {error_data.user_id}")
+                return JSONResponse(
+                    status_code=404,
+                    content={"status": "error", "message": "No chat_id found for user"}
+                )
+        except Exception as e:
+            logger.error(f"Error looking up chat_id: {e}")
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Failed to lookup chat_id"}
+            )
+
+    # Send notification to user
+    try:
+        from utils.whapi_messaging import send_whatsapp_message
+        send_whatsapp_message(
+            chat_id,
+            "We encountered an issue processing your message and are retrying now. You'll hear from us shortly."
+        )
+        logger.info(f"Sent error notification to chat_id: {chat_id}")
+    except Exception as e:
+        logger.error(f"Failed to send error notification: {e}")
+        # Continue even if notification fails
+
+    # Trigger retry by re-sending to n8n
+    try:
+        from workers.batching import add_message_to_batch
+        # Trigger n8n batching for this user (will send immediately with count=1)
+        add_message_to_batch(
+            chat_id=chat_id,
+            content="[n8n error retry]",
+            user_id=error_data.user_id,
+            session_id=None
+        )
+        logger.info(f"Triggered n8n retry for user_id: {error_data.user_id}")
+    except Exception as e:
+        logger.error(f"Failed to trigger n8n retry: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": "Failed to trigger retry"}
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={"status": "success", "message": "Error handled, retry triggered"}
+    )
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -126,6 +206,7 @@ async def root():
         "endpoints": {
             "health": "/health",
             "webhook": "/webhook/whapi",
+            "n8n_error": "/webhook/n8n-error",
             "debug": "/webhook/debug"
         }
     }

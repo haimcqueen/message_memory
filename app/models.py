@@ -35,7 +35,7 @@ class Message(BaseModel):
     """WhatsApp message from webhook."""
     id: str
     from_me: bool
-    type: Literal["text", "voice", "image", "video", "document", "audio", "short"]
+    type: Literal["text", "voice", "image", "video", "document", "audio", "short", "link_preview"]
     chat_id: str
     timestamp: int
     source: Optional[str] # Usually "api" or "mobile", but optional for robustness
@@ -46,6 +46,7 @@ class Message(BaseModel):
     document: Optional[dict] = None  # Document content
     audio: Optional[dict] = None  # Audio content
     short: Optional[dict] = None  # Short video content (WhatsApp reels)
+    link_preview: Optional[dict] = None  # Link preview content
     from_: str = Field(alias="from")
     from_name: Optional[str] = None  # Not present in API-sent messages
 
@@ -64,3 +65,10 @@ class WhapiWebhook(BaseModel):
 
     # For status updates (delivered, read, etc.)
     statuses: Optional[list[dict]] = None
+
+
+class N8nErrorWebhook(BaseModel):
+    """n8n error webhook payload."""
+    user_id: str
+    error_message: str
+    chat_id: Optional[str] = None  # If n8n can provide it, otherwise we'll look it up

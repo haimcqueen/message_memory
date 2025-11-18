@@ -56,6 +56,47 @@ def get_user_id_by_phone(phone_number: str) -> Optional[str]:
     wait=wait_exponential(multiplier=1, min=1, max=8),
     reraise=True
 )
+def get_chat_id_by_user_id(user_id: str) -> Optional[str]:
+    """
+    Get the most recent chat_id for a user.
+
+    Args:
+        user_id: Internal user ID
+
+    Returns:
+        chat_id if found, None otherwise
+    """
+    supabase = get_supabase()
+
+    logger.info(f"Looking up chat_id for user_id: {user_id}")
+
+    try:
+        # Get the most recent message for this user to find their chat_id
+        response = supabase.table("messages") \
+            .select("chat_id") \
+            .eq("user_id", user_id) \
+            .order("message_sent_at", desc=True) \
+            .limit(1) \
+            .execute()
+
+        if response.data and len(response.data) > 0:
+            chat_id = response.data[0]["chat_id"]
+            logger.info(f"Found chat_id: {chat_id} for user_id: {user_id}")
+            return chat_id
+        else:
+            logger.warning(f"No messages found for user_id: {user_id}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error looking up chat_id by user_id: {str(e)}")
+        raise
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    reraise=True
+)
 def insert_message(message_data: Dict[str, Any]) -> None:
     """
     Insert message into Supabase messages table with retry logic.
