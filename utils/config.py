@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     presence_typing_min_seconds: int = Field(default=13, alias="PRESENCE_TYPING_MIN_SECONDS")
     presence_typing_max_seconds: int = Field(default=18, alias="PRESENCE_TYPING_MAX_SECONDS")
 
+    # File Upload Limits
+    max_file_size_mb: int = Field(default=50, alias="MAX_FILE_SIZE_MB")
+
     class Config:
         env_file = ".env"
         case_sensitive = False
