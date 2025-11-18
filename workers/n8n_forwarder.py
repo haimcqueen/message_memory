@@ -61,13 +61,17 @@ def safe_forward_to_n8n(payload: Dict[str, Any]) -> None:
     Args:
         payload: Dictionary containing chat_id, user_id, session_id, messages, message_count
     """
+    logger.info(f"🔵 safe_forward_to_n8n called with payload: {payload}")
     try:
+        logger.info(f"🔵 Calling forward_to_n8n...")
         success = forward_to_n8n(payload)
+        logger.info(f"🔵 forward_to_n8n returned: {success}")
         if not success:
             logger.warning(
                 f"Failed to forward batch to n8n after retries for chat_id: {payload.get('chat_id')}"
             )
     except Exception as e:
         logger.error(
-            f"All retry attempts failed for n8n forwarding (chat_id: {payload.get('chat_id')}): {e}"
+            f"All retry attempts failed for n8n forwarding (chat_id: {payload.get('chat_id')}): {e}",
+            exc_info=True
         )

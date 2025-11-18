@@ -107,6 +107,8 @@ def process_and_forward_batch(chat_id: str) -> None:
     start_time_key = f"{BATCH_START_TIME_PREFIX}{chat_id}"
 
     try:
+        logger.info(f"🔄 Starting batch processing for chat_id: {chat_id}")
+
         # Calculate total time from first message to n8n forward
         start_time_str = redis_conn.get(start_time_key)
         if start_time_str:
@@ -121,18 +123,22 @@ def process_and_forward_batch(chat_id: str) -> None:
 
         # Get message count
         message_count = redis_conn.get(count_key)
+        logger.info(f"📊 Retrieved message_count from Redis: {message_count}")
+
         if not message_count:
-            logger.warning(f"No message count in batch for chat_id: {chat_id}")
+            logger.warning(f"❌ No message count in batch for chat_id: {chat_id} - exiting early")
             return
 
         message_count = int(message_count.decode())
+        logger.info(f"📊 Decoded message_count: {message_count}")
 
         # Get user_id
         user_id = redis_conn.get(user_id_key)
         user_id = user_id.decode() if user_id else None
+        logger.info(f"👤 Retrieved user_id: {user_id}")
 
         logger.info(
-            f"Processing batch for chat_id: {chat_id} "
+            f"✅ Processing batch for chat_id: {chat_id} "
             f"({message_count} messages, user_id: {user_id})"
         )
 
@@ -141,10 +147,13 @@ def process_and_forward_batch(chat_id: str) -> None:
             "user_id": user_id,
             "batched_message_count": message_count
         }
+        logger.info(f"📦 Prepared payload for n8n: {payload}")
 
         # Forward to n8n
+        logger.info(f"🚀 About to call safe_forward_to_n8n...")
         from workers.n8n_forwarder import safe_forward_to_n8n
         safe_forward_to_n8n(payload)
+        logger.info(f"✅ Returned from safe_forward_to_n8n")
 
         n8n_forward_time = time.time() - n8n_forward_start
         logger.info(f"⏱️  n8n forward request took: {n8n_forward_time:.2f}s")
