@@ -140,7 +140,23 @@ async def n8n_error_webhook(
         raise HTTPException(status_code=403, detail="Invalid n8n API key")
 
     logger.info("Received n8n error notification")
-    logger.error(f"n8n error payload: {error_data.model_dump()}")
+    payload_dict = error_data.model_dump()
+    logger.error(f"n8n error payload: {payload_dict}")
+
+    # Extract data from n8n payload
+    mode = payload_dict.get("mode")
+    workflow_url = payload_dict.get("workflow")
+    error_message = payload_dict.get("error")
+    last_node = payload_dict.get("lastNodeExecuted")
+    stack_trace = payload_dict.get("stack")
+
+    # Skip manual test executions
+    if mode == "manual":
+        logger.info("Skipping notification for manual execution")
+        return JSONResponse(
+            status_code=200,
+            content={"status": "skipped", "message": "Manual execution ignored"}
+        )
 
     # Send notification to hardcoded admin phone number
     admin_chat_id = "4915202618514@s.whatsapp.net"
@@ -148,8 +164,22 @@ async def n8n_error_webhook(
     try:
         from utils.whapi_messaging import send_whatsapp_message
 
-        error_msg = error_data.error_message or "Unknown error"
-        notification_text = f"🚨 n8n Workflow Error\n\nError: {error_msg}"
+        # Build notification message
+        notification_parts = ["🚨 n8n Workflow Error"]
+
+        if workflow_url:
+            notification_parts.append(f"\n📋 Workflow: {workflow_url}")
+
+        if error_message:
+            notification_parts.append(f"\n❌ Error: {error_message}")
+
+        if last_node:
+            notification_parts.append(f"\n🔧 Failed Node: {last_node}")
+
+        if mode:
+            notification_parts.append(f"\n🔄 Mode: {mode}")
+
+        notification_text = "".join(notification_parts)
 
         send_whatsapp_message(admin_chat_id, notification_text)
         logger.info(f"Sent n8n error notification to admin: {admin_chat_id}")
