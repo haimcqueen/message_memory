@@ -1,2 +1,2 @@
 web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
-worker: rq worker whatsapp-messages --url $REDIS_URL --with-scheduler
+worker: uv run rq worker whatsapp-messages --url $REDIS_URL --with-scheduler
