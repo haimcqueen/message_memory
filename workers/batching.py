@@ -1,5 +1,6 @@
 """Message batching logic for n8n webhook forwarding."""
 import logging
+import time
 from datetime import timedelta
 from typing import Optional
 from redis import Redis
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 BATCH_COUNT_PREFIX = "n8n_count:"
 BATCH_USER_ID_PREFIX = "n8n_user:"
 BATCH_JOB_ID_PREFIX = "n8n_job:"
+BATCH_START_TIME_PREFIX = "n8n_start_time:"
 
 
 def get_redis_connection() -> Redis:
@@ -42,8 +44,13 @@ def add_message_to_batch(
     count_key = f"{BATCH_COUNT_PREFIX}{chat_id}"
     user_id_key = f"{BATCH_USER_ID_PREFIX}{chat_id}"
     job_id_key = f"{BATCH_JOB_ID_PREFIX}{chat_id}"
+    start_time_key = f"{BATCH_START_TIME_PREFIX}{chat_id}"
 
     try:
+        # Store start time (first message timestamp)
+        if not redis_conn.exists(start_time_key):
+            redis_conn.set(start_time_key, str(time.time()))
+
         # Increment message counter
         redis_conn.incr(count_key)
         logger.info(f"Incremented message count for chat_id: {chat_id}")
@@ -97,8 +104,21 @@ def process_and_forward_batch(chat_id: str) -> None:
     count_key = f"{BATCH_COUNT_PREFIX}{chat_id}"
     user_id_key = f"{BATCH_USER_ID_PREFIX}{chat_id}"
     job_id_key = f"{BATCH_JOB_ID_PREFIX}{chat_id}"
+    start_time_key = f"{BATCH_START_TIME_PREFIX}{chat_id}"
 
     try:
+        # Calculate total time from first message to n8n forward
+        start_time_str = redis_conn.get(start_time_key)
+        if start_time_str:
+            start_time = float(start_time_str.decode())
+            total_time = time.time() - start_time
+            logger.info(f"⏱️  Total time from first message to n8n forward: {total_time:.2f}s")
+        else:
+            logger.warning(f"No start time found for chat_id: {chat_id}")
+
+        # Mark when we start forwarding to n8n
+        n8n_forward_start = time.time()
+
         # Get message count
         message_count = redis_conn.get(count_key)
         if not message_count:
@@ -126,10 +146,14 @@ def process_and_forward_batch(chat_id: str) -> None:
         from workers.n8n_forwarder import safe_forward_to_n8n
         safe_forward_to_n8n(payload)
 
+        n8n_forward_time = time.time() - n8n_forward_start
+        logger.info(f"⏱️  n8n forward request took: {n8n_forward_time:.2f}s")
+
         # Clear the batch from Redis
         redis_conn.delete(count_key)
         redis_conn.delete(user_id_key)
         redis_conn.delete(job_id_key)
+        redis_conn.delete(start_time_key)
 
         logger.info(f"Successfully processed and cleared batch for chat_id: {chat_id}")
 
