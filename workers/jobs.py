@@ -55,6 +55,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         content = None
         media_url = None
         extracted_media_content = None  # For storing parsed PDF content
+        skip_n8n_batch = False  # Flag to skip n8n batching for rejected files
 
         if message_type == "text":
             content = message_data.get("text", {}).get("body", "")
@@ -122,31 +123,33 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             # Default content to caption or placeholder
             content = caption if caption else f"[{message_type.title()} message]"
 
+            # Check file size FIRST (before attempting notifications)
+            max_size_bytes = settings.max_file_size_mb * 1024 * 1024
+            if message_type == "document" and file_size > max_size_bytes:
+                # File too large - set flags first
+                logger.warning(
+                    f"Document too large ({file_size / 1024 / 1024:.2f}MB > "
+                    f"{settings.max_file_size_mb}MB) for message {message_id}"
+                )
+                media_url = None
+                media_error = f"FILE_TOO_LARGE::{file_size}::{settings.max_file_size_mb}MB_limit"
+                content = f"[Document too large: {file_size / 1024 / 1024:.2f}MB]"
+                skip_n8n_batch = True  # Don't send to n8n
+
             # Send notifications for user messages only
             if origin == "user":
                 try:
-                    # Check file size and send appropriate notification
-                    max_size_bytes = settings.max_file_size_mb * 1024 * 1024
-
                     if message_type == "video":
                         # Notify user we cannot process videos yet
                         send_whatsapp_message(chat_id, "We cannot watch videos yet.")
                         logger.info(f"Sent video notification to {chat_id}")
                     elif message_type == "document":
                         if file_size > max_size_bytes:
-                            # File too large - notify and skip processing
+                            # File too large - notify user
                             send_whatsapp_message(
                                 chat_id,
                                 "Sorry, the file is too big, can you compress it or delete unneeded parts?"
                             )
-                            logger.warning(
-                                f"Document too large ({file_size / 1024 / 1024:.2f}MB > "
-                                f"{settings.max_file_size_mb}MB) for message {message_id}"
-                            )
-                            # Set media_url to None to skip processing but still save message
-                            media_url = None
-                            media_error = f"FILE_TOO_LARGE::{file_size}::{settings.max_file_size_mb}MB_limit"
-                            content = f"[Document too large: {file_size / 1024 / 1024:.2f}MB]"
                         else:
                             # Document is acceptable - notify processing
                             send_whatsapp_message(chat_id, "Reading the doc you're sending me")
@@ -248,8 +251,8 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         # Insert into database
         insert_message(db_message)
 
-        # Add to n8n batch if this is a user message
-        if not from_me:  # Only batch user messages
+        # Add to n8n batch if this is a user message and not a rejected file
+        if not from_me and not skip_n8n_batch:  # Only batch user messages that aren't rejected
             logger.info(f"User message detected (from_me={from_me}), adding to n8n batch")
             try:
                 from workers.batching import add_message_to_batch
@@ -262,6 +265,8 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             except Exception as e:
                 # Don't let batching failures block message processing
                 logger.error(f"Failed to add message to n8n batch: {e}")
+        elif not from_me and skip_n8n_batch:
+            logger.info(f"Skipping n8n batch for rejected file (message {message_id})")
 
         # If processing failed (no media_url for media types), create a processing job
         if message_type in ["voice", "image", "video", "document", "audio"] and not media_url:
