@@ -195,7 +195,14 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                             # PDF parsing was attempted but failed
                             logger.warning(f"PDF parsing failed or returned empty for {message_id}")
                             pdf_parsing_error = "PDF_PARSING::failed_or_empty::see_logs"
-                            # Keep caption as content
+
+                            # Notify user that parsing failed (only for user messages)
+                            if origin == "user":
+                                try:
+                                    send_whatsapp_message(chat_id, "Couldn't parse the document.")
+                                    logger.info(f"Sent PDF parsing failure notification to {chat_id}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to send PDF parsing failure notification: {str(e)}")
                     else:
                         logger.warning(f"Media processing returned None for {message_id}")
                         media_error = f"MEDIA_PROCESSING::returned_none::{message_type}_{media_id}"
