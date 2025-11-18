@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Dict, Any
 from workers.database import insert_message, create_processing_job, get_user_id_by_phone
 from workers.transcription import transcribe_voice_message
-from workers.session import detect_session
 from workers.media import process_media_message
 from workers.presence import send_presence
 from utils.whapi_messaging import send_whatsapp_message
@@ -242,8 +241,8 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             # Exit early - do not insert to database or trigger n8n batching
             return
 
-        # Detect session
-        session_id = detect_session(chat_id=chat_id, message_content=content, origin=origin)
+        # TODO: Session detection temporarily disabled for performance
+        session_id = None
 
         # Convert Unix timestamp to ISO format string for Supabase
         # WhatsApp timestamp is in seconds since epoch
