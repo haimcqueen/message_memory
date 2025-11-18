@@ -257,9 +257,6 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             )
             return
 
-        # TODO: Session detection temporarily disabled for performance
-        session_id = None
-
         # Convert Unix timestamp to ISO format string for Supabase
         # WhatsApp timestamp is in seconds since epoch
         message_sent_at = datetime.fromtimestamp(timestamp).isoformat()
@@ -273,7 +270,6 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             "origin": origin,
             "type": message_type,
             "message_sent_at": message_sent_at,  # When the message was actually sent
-            "session_id": session_id,
             "chat_id": chat_id,
             "media_url": media_url,
             "whapi_message_id": message_id,
@@ -291,8 +287,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                 add_message_to_batch(
                     chat_id=chat_id,
                     content=content or "[No content]",
-                    user_id=user_id,
-                    session_id=session_id
+                    user_id=user_id
                 )
             except Exception as e:
                 # Don't let batching failures block message processing

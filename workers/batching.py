@@ -26,8 +26,7 @@ def get_redis_connection() -> Redis:
 def add_message_to_batch(
     chat_id: str,
     content: str,
-    user_id: Optional[str] = None,
-    session_id: Optional[str] = None
+    user_id: Optional[str] = None
 ) -> None:
     """
     Increment message counter and schedule/reschedule the batch processing job.
@@ -38,7 +37,6 @@ def add_message_to_batch(
         chat_id: WhatsApp chat ID
         content: Message content (not used, kept for backward compatibility)
         user_id: User ID from database
-        session_id: Session ID from database (not used, kept for backward compatibility)
     """
     logger.info(f"add_message_to_batch called for chat_id: {chat_id}, user_id: {user_id}")
     redis_conn = get_redis_connection()
