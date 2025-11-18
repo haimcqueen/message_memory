@@ -6,7 +6,6 @@
   "deploy": {
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10,
-    "startCommand": "uv run rq worker whatsapp-messages --url $REDIS_URL --with-scheduler"
+    "restartPolicyMaxRetries": 10
   }
 }
