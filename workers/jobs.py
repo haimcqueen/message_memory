@@ -248,6 +248,14 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             # Exit early - do not insert to database or trigger n8n batching
             return
 
+        # Skip database insertion for agent messages to unknown users
+        # These are rejection messages sent to users not in our database
+        if user_id is None and from_me:
+            logger.info(
+                f"Skipping database insertion for agent message to unknown user: {customer_phone}"
+            )
+            return
+
         # TODO: Session detection temporarily disabled for performance
         session_id = None
 
