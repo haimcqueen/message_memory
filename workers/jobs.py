@@ -42,10 +42,10 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         # Determine origin
         origin = "agent" if from_me else "user"
 
-        # Send typing presence for user messages
+        # Send typing presence for user messages (without initial wait)
         if origin == "user":
             try:
-                send_presence(chat_id, presence="typing")
+                send_presence(chat_id, presence="typing", wait_before=False)
             except Exception as e:
                 logger.warning(f"Failed to send typing presence: {str(e)}")
 
