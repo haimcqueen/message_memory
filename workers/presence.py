@@ -23,7 +23,7 @@ PresenceType = Literal["typing", "recording", "paused", "available", "unavailabl
     retry=retry_if_exception_type(requests.exceptions.RequestException),
     reraise=True
 )
-def send_presence(chat_id: str, presence: PresenceType = "typing", delay: int = None, wait_before: bool = True) -> bool:
+def send_presence(chat_id: str, presence: PresenceType = "typing", delay: int = None) -> bool:
     """
     Send typing or recording presence to a WhatsApp chat via Whapi API.
 
@@ -31,20 +31,10 @@ def send_presence(chat_id: str, presence: PresenceType = "typing", delay: int = 
         chat_id: WhatsApp chat ID (e.g., "4915202618514@s.whatsapp.net")
         presence: Type of presence to send (typing, recording, paused, etc.)
         delay: Duration in seconds to show the presence (default: random between config min/max)
-        wait_before: If True, wait randomly before sending presence (default: True)
 
     Returns:
         True if presence was sent successfully, False otherwise
     """
-    # Random wait before sending presence (simulate human delay)
-    if wait_before:
-        wait_time = random.uniform(
-            settings.presence_wait_min_seconds,
-            settings.presence_wait_max_seconds
-        )
-        logger.info(f"Waiting {wait_time:.2f}s before sending presence to {chat_id}")
-        time.sleep(wait_time)
-
     # Random typing duration if not specified
     if delay is None:
         delay = random.randint(
