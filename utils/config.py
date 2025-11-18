@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # Session Detection Configuration
     session_timeout_hours: int = Field(default=24, alias="SESSION_TIMEOUT_HOURS")
     session_recent_messages_limit: int = Field(default=20, alias="SESSION_RECENT_MESSAGES_LIMIT")
-    session_detection_temperature: float = Field(default=0.0, alias="SESSION_DETECTION_TEMPERATURE")
+    session_detection_temperature: float = Field(default=1.0, alias="SESSION_DETECTION_TEMPERATURE")
     session_detection_max_tokens: int = Field(default=10, alias="SESSION_DETECTION_MAX_TOKENS")
 
     # Presence Configuration

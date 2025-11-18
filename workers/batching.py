@@ -76,7 +76,7 @@ def add_message_to_batch(
         redis_conn.set(job_id_key, job.id)
         logger.info(
             f"Scheduled batch processing job {job.id} for chat_id: {chat_id} "
-            f"(will fire in {BATCH_DELAY_SECONDS} seconds)"
+            f"(will fire in {settings.n8n_batch_delay_seconds} seconds)"
         )
 
     except Exception as e:
