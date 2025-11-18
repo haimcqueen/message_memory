@@ -8,6 +8,8 @@ from workers.transcription import transcribe_voice_message
 from workers.session import detect_session
 from workers.media import process_media_message
 from workers.presence import send_presence
+from utils.whapi_messaging import send_whatsapp_message
+from utils.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -115,14 +117,52 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             media_id = media_data.get("id")
             mime_type = media_data.get("mime_type")
             caption = media_data.get("caption", "")
+            file_size = media_data.get("file_size", 0)  # File size in bytes
 
             # Default content to caption or placeholder
             content = caption if caption else f"[{message_type.title()} message]"
 
+            # Send notifications for user messages only
+            if origin == "user":
+                try:
+                    # Check file size and send appropriate notification
+                    max_size_bytes = settings.max_file_size_mb * 1024 * 1024
+
+                    if message_type == "video":
+                        # Notify user we cannot process videos yet
+                        send_whatsapp_message(chat_id, "We cannot watch videos yet.")
+                        logger.info(f"Sent video notification to {chat_id}")
+                    elif message_type == "document":
+                        if file_size > max_size_bytes:
+                            # File too large - notify and skip processing
+                            send_whatsapp_message(
+                                chat_id,
+                                "Sorry, the file is too big, can you compress it or delete unneeded parts?"
+                            )
+                            logger.warning(
+                                f"Document too large ({file_size / 1024 / 1024:.2f}MB > "
+                                f"{settings.max_file_size_mb}MB) for message {message_id}"
+                            )
+                            # Set media_url to None to skip processing but still save message
+                            media_url = None
+                            media_error = f"FILE_TOO_LARGE::{file_size}::{settings.max_file_size_mb}MB_limit"
+                            content = f"[Document too large: {file_size / 1024 / 1024:.2f}MB]"
+                        else:
+                            # Document is acceptable - notify processing
+                            send_whatsapp_message(chat_id, "Reading the doc you're sending me")
+                            logger.info(f"Sent document processing notification to {chat_id}")
+                except Exception as e:
+                    # Don't let notification failures block processing
+                    logger.warning(f"Failed to send file notification: {str(e)}")
+
+            # Skip processing if file was too large (already handled in notification block)
             if not media_id:
                 logger.warning(f"No media_id found for {message_type} message {message_id}")
                 media_url = None
                 media_error = f"MISSING_DATA::media_id::{message_type}_message_{message_id}"
+            elif message_type == "document" and file_size > settings.max_file_size_mb * 1024 * 1024:
+                # Already notified user, just skip processing
+                logger.info(f"Skipping processing for oversized document {message_id}")
             else:
                 try:
                     logger.info(f"Processing {message_type} media: {media_id}")
