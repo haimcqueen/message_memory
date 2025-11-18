@@ -68,7 +68,8 @@ class WhapiWebhook(BaseModel):
 
 
 class N8nErrorWebhook(BaseModel):
-    """n8n error webhook payload."""
-    user_id: str
-    error_message: str
-    chat_id: Optional[str] = None  # If n8n can provide it, otherwise we'll look it up
+    """n8n error webhook payload - accepts any error format from n8n."""
+    error_message: Optional[str] = None
+    # Accept any additional fields n8n might send
+    class Config:
+        extra = "allow"

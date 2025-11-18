@@ -123,10 +123,10 @@ async def n8n_error_webhook(
     authorization: str = Header(None)
 ):
     """
-    Receive n8n workflow error notifications and notify user with retry.
+    Receive n8n workflow error notifications and send alert to admin.
 
     Args:
-        error_data: Error information from n8n
+        error_data: Error information from n8n (accepts any format)
         authorization: Bearer token for authentication
     """
     from app.models import N8nErrorWebhook
@@ -139,61 +139,30 @@ async def n8n_error_webhook(
     if token != settings.n8n_webhook_api_key:
         raise HTTPException(status_code=403, detail="Invalid n8n API key")
 
-    logger.info(f"Received n8n error for user_id: {error_data.user_id}")
-    logger.error(f"n8n error message: {error_data.error_message}")
+    logger.info("Received n8n error notification")
+    logger.error(f"n8n error payload: {error_data.model_dump()}")
 
-    # Get chat_id if not provided
-    chat_id = error_data.chat_id
-    if not chat_id:
-        from workers.database import get_chat_id_by_user_id
-        try:
-            chat_id = get_chat_id_by_user_id(error_data.user_id)
-            if not chat_id:
-                logger.error(f"No chat_id found for user_id: {error_data.user_id}")
-                return JSONResponse(
-                    status_code=404,
-                    content={"status": "error", "message": "No chat_id found for user"}
-                )
-        except Exception as e:
-            logger.error(f"Error looking up chat_id: {e}")
-            return JSONResponse(
-                status_code=500,
-                content={"status": "error", "message": "Failed to lookup chat_id"}
-            )
+    # Send notification to hardcoded admin phone number
+    admin_chat_id = "4915202618514@s.whatsapp.net"
 
-    # Send notification to user
     try:
         from utils.whapi_messaging import send_whatsapp_message
-        send_whatsapp_message(
-            chat_id,
-            "We encountered an issue processing your message and are retrying now. You'll hear from us shortly."
-        )
-        logger.info(f"Sent error notification to chat_id: {chat_id}")
+
+        error_msg = error_data.error_message or "Unknown error"
+        notification_text = f"🚨 n8n Workflow Error\n\nError: {error_msg}"
+
+        send_whatsapp_message(admin_chat_id, notification_text)
+        logger.info(f"Sent n8n error notification to admin: {admin_chat_id}")
     except Exception as e:
         logger.error(f"Failed to send error notification: {e}")
-        # Continue even if notification fails
-
-    # Trigger retry by re-sending to n8n
-    try:
-        from workers.batching import add_message_to_batch
-        # Trigger n8n batching for this user (will send immediately with count=1)
-        add_message_to_batch(
-            chat_id=chat_id,
-            content="[n8n error retry]",
-            user_id=error_data.user_id,
-            session_id=None
-        )
-        logger.info(f"Triggered n8n retry for user_id: {error_data.user_id}")
-    except Exception as e:
-        logger.error(f"Failed to trigger n8n retry: {e}")
         return JSONResponse(
             status_code=500,
-            content={"status": "error", "message": "Failed to trigger retry"}
+            content={"status": "error", "message": "Failed to send notification"}
         )
 
     return JSONResponse(
         status_code=200,
-        content={"status": "success", "message": "Error handled, retry triggered"}
+        content={"status": "success", "message": "Error notification sent"}
     )
 
 
