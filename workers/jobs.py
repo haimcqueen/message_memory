@@ -60,6 +60,11 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         if message_type == "text":
             content = message_data.get("text", {}).get("body", "")
 
+        elif message_type == "link_preview":
+            # Link preview messages have content in the link_preview.body field
+            link_preview_data = message_data.get("link_preview") or {}
+            content = link_preview_data.get("body", "")
+
         elif message_type == "voice":
             # Transcribe voice message
             voice_data = message_data.get("voice", {})
