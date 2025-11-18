@@ -1,4 +1,5 @@
 """RQ job handlers for processing WhatsApp messages."""
+import workers.logging_config  # Initialize logging for worker processes
 import logging
 import uuid
 from datetime import datetime

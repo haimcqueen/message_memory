@@ -1,4 +1,5 @@
 """Message batching logic for n8n webhook forwarding."""
+import workers.logging_config  # Initialize logging for worker processes
 import logging
 import time
 from datetime import timedelta
