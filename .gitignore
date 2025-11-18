@@ -27,4 +27,5 @@ Thumbs.db
 
 # Temp files
 /tmp/
-*.tmp
+*.tmp.coverage
+htmlcov/
