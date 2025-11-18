@@ -219,11 +219,23 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
         user_id = get_user_id_by_phone(customer_phone)
 
-        if user_id is None:
+        # Reject messages from unknown phone numbers (not in users table)
+        if user_id is None and not from_me:
             logger.warning(
-                f"Phone number {customer_phone} not found in users table. "
-                f"Message will be saved with NULL user_id."
+                f"Rejecting message from unknown phone number: {customer_phone}. "
+                f"Number not found in users table."
             )
+            try:
+                send_whatsapp_message(
+                    chat_id,
+                    "Unfortunately this number is not in our database - please contact the publyc team."
+                )
+                logger.info(f"Sent rejection message to {customer_phone}")
+            except Exception as e:
+                logger.error(f"Failed to send rejection message to {customer_phone}: {e}")
+
+            # Exit early - do not insert to database or trigger n8n batching
+            return
 
         # Detect session
         session_id = detect_session(chat_id=chat_id, message_content=content, origin=origin)

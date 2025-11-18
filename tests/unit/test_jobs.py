@@ -328,3 +328,115 @@ class TestFileSizeValidation:
             # 75MB should be accepted with 100MB limit
             assert mock_media.called, "75MB document should be processed with 100MB limit"
             assert mock_n8n_batch.called, "75MB document should trigger n8n with 100MB limit"
+
+    @pytest.mark.unit
+    def test_unknown_phone_number_rejection(self, mock_settings):
+        """Test that messages from unknown phone numbers are rejected with a message."""
+        webhook_data = {
+            "id": "test-msg-unknown-number",
+            "type": "text",
+            "chat_id": "9999999999@s.whatsapp.net",
+            "from_me": False,
+            "from": "9999999999",
+            "timestamp": 1700000000,
+            "text": {"body": "Hello, can you help me?"}
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value=None), \
+             patch('workers.jobs.detect_session') as mock_session, \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            process_whatsapp_message(webhook_data)
+
+            # Should send rejection message
+            assert mock_send_msg.called, "Should send rejection message to unknown number"
+            rejection_message = mock_send_msg.call_args[0][1]
+            assert "not in our database" in rejection_message.lower(), \
+                "Rejection message should indicate number not in database"
+            assert "contact the publyc team" in rejection_message.lower(), \
+                "Rejection message should tell them to contact publyc"
+
+            # Should NOT insert to database
+            assert not mock_insert.called, \
+                "Should not insert message from unknown number to database"
+
+            # Should NOT trigger n8n batching
+            assert not mock_n8n_batch.called, \
+                "Should not trigger n8n for unknown number"
+
+            # Should NOT call session detection
+            assert not mock_session.called, \
+                "Should not detect session for unknown number"
+
+    @pytest.mark.unit
+    def test_unknown_phone_number_rejection_handles_api_failure(self, mock_settings):
+        """Test that unknown number rejection handles API failures gracefully."""
+        webhook_data = {
+            "id": "test-msg-unknown-api-fail",
+            "type": "text",
+            "chat_id": "9999999999@s.whatsapp.net",
+            "from_me": False,
+            "from": "9999999999",
+            "timestamp": 1700000000,
+            "text": {"body": "Hello"}
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value=None), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            # Simulate Whapi API failure
+            mock_send_msg.side_effect = Exception("Whapi API error")
+
+            # Should not raise exception (graceful handling)
+            process_whatsapp_message(webhook_data)
+
+            # Even though notification failed, should still not insert or batch
+            assert not mock_insert.called, \
+                "Should not insert to database even if rejection message fails"
+            assert not mock_n8n_batch.called, \
+                "Should not trigger n8n even if rejection message fails"
+
+    @pytest.mark.unit
+    def test_agent_messages_with_null_user_id_still_processed(self, mock_settings):
+        """Test that agent messages (from_me=True) are processed even if user_id is None."""
+        webhook_data = {
+            "id": "test-msg-agent-null-user",
+            "type": "text",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": True,  # Agent message
+            "from": "agent-phone",
+            "timestamp": 1700000000,
+            "text": {"body": "This is a response from the agent"}
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value=None), \
+             patch('workers.jobs.detect_session', return_value="session-456"), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            process_whatsapp_message(webhook_data)
+
+            # Agent messages should be processed normally even with NULL user_id
+            assert mock_insert.called, \
+                "Agent messages should be inserted even if user_id is None"
+
+            # Agent messages should never trigger n8n batching (tested elsewhere)
+            assert not mock_n8n_batch.called, \
+                "Agent messages should never trigger n8n batching"
+
+            # Should NOT send rejection message to agent
+            rejection_calls = [call for call in mock_send_msg.call_args_list
+                             if "not in our database" in str(call).lower()]
+            assert len(rejection_calls) == 0, \
+                "Should not send rejection message for agent messages"
