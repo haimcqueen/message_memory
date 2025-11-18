@@ -71,10 +71,10 @@ def call_llm_for_session_detection(
     """
     logger.info("Calling LLM for session detection")
 
+    # Note: temperature parameter omitted - gpt-5-mini models only support default (1.0)
     response = openai_client.chat.completions.create(
         model=settings.openai_session_model,
         messages=get_session_detection_messages(recent_messages, new_message_content),
-        temperature=settings.session_detection_temperature,
         max_completion_tokens=settings.session_detection_max_tokens
     )
 

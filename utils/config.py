@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     # Session Detection Configuration
     session_timeout_hours: int = Field(default=24, alias="SESSION_TIMEOUT_HOURS")
     session_recent_messages_limit: int = Field(default=20, alias="SESSION_RECENT_MESSAGES_LIMIT")
-    session_detection_temperature: float = Field(default=1.0, alias="SESSION_DETECTION_TEMPERATURE")
     session_detection_max_tokens: int = Field(default=10, alias="SESSION_DETECTION_MAX_TOKENS")
+    # Note: temperature not configurable - gpt-5-mini models only support default (1.0)
 
     # Presence Configuration
     presence_typing_min_seconds: int = Field(default=13, alias="PRESENCE_TYPING_MIN_SECONDS")
