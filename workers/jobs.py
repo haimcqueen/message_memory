@@ -55,6 +55,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         content = None
         media_url = None
         extracted_media_content = None  # For storing parsed PDF content
+        skip_n8n_batch = False  # Flag to skip n8n batching for rejected files
 
         if message_type == "text":
             content = message_data.get("text", {}).get("body", "")
@@ -248,8 +249,8 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         # Insert into database
         insert_message(db_message)
 
-        # Add to n8n batch if this is a user message
-        if not from_me:  # Only batch user messages
+        # Add to n8n batch if this is a user message and not a rejected file
+        if not from_me and not skip_n8n_batch:  # Only batch user messages that aren't rejected
             logger.info(f"User message detected (from_me={from_me}), adding to n8n batch")
             try:
                 from workers.batching import add_message_to_batch
@@ -262,6 +263,8 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             except Exception as e:
                 # Don't let batching failures block message processing
                 logger.error(f"Failed to add message to n8n batch: {e}")
+        elif not from_me and skip_n8n_batch:
+            logger.info(f"Skipping n8n batch for rejected file (message {message_id})")
 
         # If processing failed (no media_url for media types), create a processing job
         if message_type in ["voice", "image", "video", "document", "audio"] and not media_url:
