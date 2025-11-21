@@ -40,7 +40,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             mock_media.return_value = ("https://storage.url/file.pdf", "parsed content")
@@ -83,7 +82,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
@@ -94,8 +92,8 @@ class TestFileSizeValidation:
             # Should send rejection notification
             assert mock_send_msg.called, "Should send rejection notification"
             notification = mock_send_msg.call_args[0][1]
-            assert "too big" in notification.lower(), \
-                "Should send 'too big' rejection message"
+            assert "we don't support media of this size" in notification.lower(), \
+                "Should send unified rejection message"
 
     @pytest.mark.unit
     def test_file_size_check_well_under_limit(self, mock_settings):
@@ -123,7 +121,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             mock_media.return_value = ("https://storage.url/file.pdf", "parsed content")
@@ -169,7 +166,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             # Simulate Whapi API failure
@@ -199,7 +195,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.send_presence'), \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
@@ -209,9 +204,9 @@ class TestFileSizeValidation:
                 "Agent messages (from_me=True) should never trigger n8n batching"
 
     @pytest.mark.unit
-    def test_video_messages_not_affected_by_document_size_limit(self, mock_settings):
-        """Test that video messages are not affected by document size limit check."""
-        # 75MB video (larger than document limit)
+    def test_video_messages_also_affected_by_size_limit(self, mock_settings):
+        """Test that video messages ARE affected by the 50MB size limit."""
+        # 75MB video (larger than 50MB limit)
         file_size_bytes = 75 * 1024 * 1024
 
         webhook_data = {
@@ -235,21 +230,18 @@ class TestFileSizeValidation:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
-
-            mock_media.return_value = ("https://storage.url/video.mp4", None)
 
             process_whatsapp_message(webhook_data)
 
-            # Videos should be processed regardless of size (only documents have size check)
-            assert mock_media.called, "Video should be processed (size limit is for documents only)"
-            assert mock_n8n_batch.called, "Video should trigger n8n batching"
-            # Should send video notification, not rejection
-            assert mock_send_msg.called
+            # Videos over 50MB should be rejected
+            assert not mock_media.called, "Oversized video should not be processed"
+            assert not mock_n8n_batch.called, "Oversized video should not trigger n8n"
+            # Should send rejection notification
+            assert mock_send_msg.called, "Should send rejection notification"
             notification = mock_send_msg.call_args[0][1]
-            assert "cannot watch videos" in notification.lower(), \
-                "Should send video notification, not size rejection"
+            assert "we don't support media of this size" in notification.lower(), \
+                "Should send unified rejection message for oversized video"
 
     @pytest.mark.unit
     def test_zero_size_document(self, mock_settings):
@@ -275,7 +267,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             mock_media.return_value = ("https://storage.url/file.pdf", "")
@@ -318,7 +309,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message'), \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             mock_media.return_value = ("https://storage.url/file.pdf", "parsed content")
@@ -347,7 +337,6 @@ class TestFileSizeValidation:
              patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value=None), \
-             patch('workers.jobs.detect_session') as mock_session, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
@@ -367,10 +356,6 @@ class TestFileSizeValidation:
             # Should NOT trigger n8n batching
             assert not mock_n8n_batch.called, \
                 "Should not trigger n8n for unknown number"
-
-            # Should NOT call session detection
-            assert not mock_session.called, \
-                "Should not detect session for unknown number"
 
     @pytest.mark.unit
     def test_unknown_phone_number_rejection_handles_api_failure(self, mock_settings):
@@ -405,8 +390,12 @@ class TestFileSizeValidation:
                 "Should not trigger n8n even if rejection message fails"
 
     @pytest.mark.unit
-    def test_agent_messages_with_null_user_id_still_processed(self, mock_settings):
-        """Test that agent messages (from_me=True) are processed even if user_id is None."""
+    def test_agent_messages_with_null_user_id_not_inserted(self, mock_settings):
+        """Test that agent messages (from_me=True) with NULL user_id are NOT inserted.
+
+        This is correct behavior - agent messages to unknown users (rejection messages)
+        should not be stored in the database.
+        """
         webhook_data = {
             "id": "test-msg-agent-null-user",
             "type": "text",
@@ -422,14 +411,13 @@ class TestFileSizeValidation:
              patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value=None), \
-             patch('workers.jobs.detect_session', return_value="session-456"), \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
 
-            # Agent messages should be processed normally even with NULL user_id
-            assert mock_insert.called, \
-                "Agent messages should be inserted even if user_id is None"
+            # Agent messages to unknown users should NOT be inserted
+            assert not mock_insert.called, \
+                "Agent messages to unknown users should NOT be inserted to database"
 
             # Agent messages should never trigger n8n batching (tested elsewhere)
             assert not mock_n8n_batch.called, \

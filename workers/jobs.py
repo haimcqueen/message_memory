@@ -130,35 +130,31 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
             # Check file size FIRST (before attempting notifications)
             max_size_bytes = settings.max_file_size_mb * 1024 * 1024
-            if message_type == "document" and file_size > max_size_bytes:
+            if message_type in ("image", "video", "document", "audio") and file_size > max_size_bytes:
                 # File too large - set flags first
                 logger.warning(
-                    f"Document too large ({file_size / 1024 / 1024:.2f}MB > "
+                    f"{message_type.title()} too large ({file_size / 1024 / 1024:.2f}MB > "
                     f"{settings.max_file_size_mb}MB) for message {message_id}"
                 )
                 media_url = None
                 media_error = f"FILE_TOO_LARGE::{file_size}::{settings.max_file_size_mb}MB_limit"
-                content = f"[Document too large: {file_size / 1024 / 1024:.2f}MB]"
+                content = f"[{message_type.title()} too large: {file_size / 1024 / 1024:.2f}MB]"
                 skip_n8n_batch = True  # Don't send to n8n
 
             # Send notifications for user messages only
             if origin == "user":
                 try:
-                    if message_type == "video":
-                        # Notify user we cannot process videos yet
-                        send_whatsapp_message(chat_id, "We cannot watch videos yet.")
-                        logger.info(f"Sent video notification to {chat_id}")
+                    # Check if media is too large (applies to all media types)
+                    if file_size > max_size_bytes:
+                        # Unified rejection message for all oversized media
+                        send_whatsapp_message(
+                            chat_id,
+                            "We don't support media of this size"
+                        )
                     elif message_type == "document":
-                        if file_size > max_size_bytes:
-                            # File too large - notify user
-                            send_whatsapp_message(
-                                chat_id,
-                                "Sorry, the file is too big, can you compress it or delete unneeded parts?"
-                            )
-                        else:
-                            # Document is acceptable - notify processing
-                            send_whatsapp_message(chat_id, "Reading the doc you're sending me")
-                            logger.info(f"Sent document processing notification to {chat_id}")
+                        # Document is acceptable size - notify processing
+                        send_whatsapp_message(chat_id, "Reading the doc you're sending me")
+                        logger.info(f"Sent document processing notification to {chat_id}")
                 except Exception as e:
                     # Don't let notification failures block processing
                     logger.warning(f"Failed to send file notification: {str(e)}")
@@ -168,9 +164,9 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                 logger.warning(f"No media_id found for {message_type} message {message_id}")
                 media_url = None
                 media_error = f"MISSING_DATA::media_id::{message_type}_message_{message_id}"
-            elif message_type == "document" and file_size > settings.max_file_size_mb * 1024 * 1024:
+            elif message_type in ("image", "video", "document", "audio") and file_size > settings.max_file_size_mb * 1024 * 1024:
                 # Already notified user, just skip processing
-                logger.info(f"Skipping processing for oversized document {message_id}")
+                logger.info(f"Skipping processing for oversized {message_type} {message_id}")
             else:
                 try:
                     logger.info(f"Processing {message_type} media: {media_id}")
