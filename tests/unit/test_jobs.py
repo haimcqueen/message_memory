@@ -428,3 +428,513 @@ class TestFileSizeValidation:
                              if "not in our database" in str(call).lower()]
             assert len(rejection_calls) == 0, \
                 "Should not send rejection message for agent messages"
+
+class TestMediaTypeHandling:
+    """Tests for media type handling, storage, and acknowledgments."""
+
+    @pytest.fixture
+    def mock_settings(self):
+        """Mock settings with standard 50MB limit."""
+        mock = Mock()
+        mock.max_file_size_mb = 50
+        return mock
+
+    @pytest.mark.unit
+    def test_image_acceptable_size(self, mock_settings):
+        """Test image processing with acceptable size."""
+        file_size_bytes = 10 * 1024 * 1024  # 10MB
+
+        webhook_data = {
+            "id": "test-msg-image",
+            "type": "image",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "image": {
+                "id": "media-id-image",
+                "mime_type": "image/jpeg",
+                "caption": "Check this out!",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            # Mock media processing to return storage URL and parsed content
+            mock_media.return_value = ("https://storage.url/image.jpg", "<image>\nA beautiful sunset over the ocean\n</image>")
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was processed
+            assert mock_media.called, "Image should be processed"
+            assert mock_media.call_args[1]['media_type'] == 'image'
+            assert mock_media.call_args[1]['media_id'] == 'media-id-image'
+
+            # Verify correct acknowledgment message
+            assert mock_send_msg.called
+            notification = mock_send_msg.call_args[0][1]
+            assert "let me check out that image" in notification.lower()
+
+            # Verify database insertion with media_url and extracted_media_content
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] == "https://storage.url/image.jpg"
+            assert db_payload['type'] == 'image'
+            assert db_payload['content'] == "Check this out!"
+            assert db_payload['extracted_media_content'] == "<image>\nA beautiful sunset over the ocean\n</image>"
+
+            # Verify n8n batching triggered
+            assert mock_n8n_batch.called
+
+    @pytest.mark.unit
+    def test_image_oversized(self, mock_settings):
+        """Test oversized image rejection."""
+        file_size_bytes = 75 * 1024 * 1024  # 75MB
+
+        webhook_data = {
+            "id": "test-msg-image-large",
+            "type": "image",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "image": {
+                "id": "media-id-image-large",
+                "mime_type": "image/jpeg",
+                "caption": "Big image",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was NOT processed
+            assert not mock_media.called, "Oversized image should not be processed"
+
+            # Verify rejection message
+            assert mock_send_msg.called
+            notification = mock_send_msg.call_args[0][1]
+            assert "we don't support media of this size" in notification.lower()
+
+            # Verify database insertion with NO media_url
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] is None
+            assert "too large" in db_payload['content'].lower()
+
+            # Verify n8n batching NOT triggered
+            assert not mock_n8n_batch.called
+
+            # Verify processing job created
+            assert mock_job.called
+
+    @pytest.mark.unit
+    def test_image_content_extraction(self, mock_settings):
+        """Test that image content is extracted and saved to extracted_media_content."""
+        file_size_bytes = 5 * 1024 * 1024  # 5MB
+
+        webhook_data = {
+            "id": "test-msg-image-extract",
+            "type": "image",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "image": {
+                "id": "media-id-image-extract",
+                "mime_type": "image/jpeg",
+                "caption": "Screenshot with text",
+                "file_size": file_size_bytes
+            }
+        }
+
+        extracted_content = "<image>\nText visible in image: 'Hello World'\nObjects: Computer screen, keyboard\nColors: Blue background, white text\n</image>"
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            # Mock media processing to return both URL and extracted content
+            mock_media.return_value = ("https://storage.url/screenshot.jpg", extracted_content)
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was processed
+            assert mock_media.called
+            assert mock_media.call_args[1]['media_type'] == 'image'
+
+            # Verify database insertion includes extracted_media_content
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] == "https://storage.url/screenshot.jpg"
+            assert db_payload['extracted_media_content'] == extracted_content
+            assert '<image>' in db_payload['extracted_media_content']
+            assert 'Hello World' in db_payload['extracted_media_content']
+
+            # Verify n8n batching triggered with extracted content
+            assert mock_n8n_batch.called
+
+    @pytest.mark.unit
+    def test_video_acceptable_size(self, mock_settings):
+        """Test video processing with acceptable size."""
+        file_size_bytes = 10 * 1024 * 1024  # 10MB
+
+        webhook_data = {
+            "id": "test-msg-video",
+            "type": "video",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "video": {
+                "id": "media-id-video",
+                "mime_type": "video/mp4",
+                "caption": "Watch this",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            mock_media.return_value = ("https://storage.url/video.mp4", None)
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was processed
+            assert mock_media.called
+            assert mock_media.call_args[1]['media_type'] == 'video'
+
+            # Verify correct acknowledgment message
+            assert mock_send_msg.called
+            notification = mock_send_msg.call_args[0][1]
+            assert "oh we don't support videos yet" in notification.lower()
+
+            # Verify database insertion
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] == "https://storage.url/video.mp4"
+            assert db_payload['type'] == 'video'
+
+            # Verify n8n batching triggered
+            assert mock_n8n_batch.called
+
+    @pytest.mark.unit
+    def test_video_oversized(self, mock_settings):
+        """Test oversized video rejection."""
+        file_size_bytes = 75 * 1024 * 1024  # 75MB
+
+        webhook_data = {
+            "id": "test-msg-video-large",
+            "type": "video",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "video": {
+                "id": "media-id-video-large",
+                "mime_type": "video/mp4",
+                "caption": "",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was NOT processed
+            assert not mock_media.called
+
+            # Verify rejection message
+            assert mock_send_msg.called
+            notification = mock_send_msg.call_args[0][1]
+            assert "we don't support media of this size" in notification.lower()
+
+            # Verify database insertion
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] is None
+
+            # Verify n8n batching NOT triggered
+            assert not mock_n8n_batch.called
+
+            # Verify processing job created
+            assert mock_job.called
+
+    @pytest.mark.unit
+    def test_audio_acceptable_size(self, mock_settings):
+        """Test audio processing with acceptable size."""
+        file_size_bytes = 5 * 1024 * 1024  # 5MB
+
+        webhook_data = {
+            "id": "test-msg-audio",
+            "type": "audio",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "audio": {
+                "id": "media-id-audio",
+                "mime_type": "audio/ogg",
+                "caption": "",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            mock_media.return_value = ("https://storage.url/audio.ogg", None)
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was processed
+            assert mock_media.called
+            assert mock_media.call_args[1]['media_type'] == 'audio'
+
+            # Verify NO acknowledgment message for audio (fast transcription)
+            assert not mock_send_msg.called, "Audio files should not trigger acknowledgment messages"
+
+            # Verify database insertion
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] == "https://storage.url/audio.ogg"
+            assert db_payload['type'] == 'audio'
+
+            # Verify n8n batching triggered
+            assert mock_n8n_batch.called
+
+    @pytest.mark.unit
+    def test_audio_oversized(self, mock_settings):
+        """Test oversized audio rejection."""
+        file_size_bytes = 75 * 1024 * 1024  # 75MB
+
+        webhook_data = {
+            "id": "test-msg-audio-large",
+            "type": "audio",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "audio": {
+                "id": "media-id-audio-large",
+                "mime_type": "audio/mpeg",
+                "caption": "",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was NOT processed
+            assert not mock_media.called
+
+            # Verify rejection message
+            assert mock_send_msg.called
+            notification = mock_send_msg.call_args[0][1]
+            assert "we don't support media of this size" in notification.lower()
+
+            # Verify database insertion
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] is None
+
+            # Verify n8n batching NOT triggered
+            assert not mock_n8n_batch.called
+
+            # Verify processing job created
+            assert mock_job.called
+
+    @pytest.mark.unit
+    def test_document_acceptable_size(self, mock_settings):
+        """Test document processing with acceptable size."""
+        file_size_bytes = 10 * 1024 * 1024  # 10MB
+
+        webhook_data = {
+            "id": "test-msg-document",
+            "type": "document",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "document": {
+                "id": "media-id-document",
+                "mime_type": "application/pdf",
+                "caption": "Important doc",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            mock_media.return_value = ("https://storage.url/document.pdf", "Parsed PDF content goes here")
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was processed
+            assert mock_media.called
+            assert mock_media.call_args[1]['media_type'] == 'document'
+
+            # Verify correct acknowledgment message
+            assert mock_send_msg.called
+            notification = mock_send_msg.call_args[0][1]
+            assert "reading the doc" in notification.lower()
+
+            # Verify database insertion
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] == "https://storage.url/document.pdf"
+            assert db_payload['type'] == 'document'
+
+            # Verify n8n batching triggered
+            assert mock_n8n_batch.called
+
+    @pytest.mark.unit
+    def test_document_oversized(self, mock_settings):
+        """Test oversized document rejection."""
+        file_size_bytes = 75 * 1024 * 1024  # 75MB
+
+        webhook_data = {
+            "id": "test-msg-document-large",
+            "type": "document",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "document": {
+                "id": "media-id-document-large",
+                "mime_type": "application/pdf",
+                "caption": "",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was NOT processed
+            assert not mock_media.called
+
+            # Verify rejection message
+            assert mock_send_msg.called
+            notification = mock_send_msg.call_args[0][1]
+            assert "we don't support media of this size" in notification.lower()
+
+            # Verify database insertion
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] is None
+
+            # Verify n8n batching NOT triggered
+            assert not mock_n8n_batch.called
+
+            # Verify processing job created
+            assert mock_job.called
+
+    @pytest.mark.unit
+    def test_pdf_content_extraction(self, mock_settings):
+        """Test PDF document with content extraction."""
+        file_size_bytes = 5 * 1024 * 1024  # 5MB
+
+        webhook_data = {
+            "id": "test-msg-pdf-extraction",
+            "type": "document",
+            "chat_id": "1234567890@s.whatsapp.net",
+            "from_me": False,
+            "from": "1234567890",
+            "timestamp": 1700000000,
+            "document": {
+                "id": "media-id-pdf",
+                "mime_type": "application/pdf",
+                "caption": "PDF with content",
+                "file_size": file_size_bytes
+            }
+        }
+
+        with patch('workers.jobs.settings', mock_settings), \
+             patch('workers.jobs.send_presence'), \
+             patch('workers.jobs.send_whatsapp_message') as mock_send_msg, \
+             patch('workers.jobs.process_media_message') as mock_media, \
+             patch('workers.jobs.insert_message') as mock_insert, \
+             patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
+
+            # Mock media processing to return both storage URL and parsed content
+            mock_media.return_value = ("https://storage.url/document.pdf", "This is the extracted PDF content with important information.")
+
+            process_whatsapp_message(webhook_data)
+
+            # Verify media was processed
+            assert mock_media.called
+
+            # Verify database insertion with extracted content
+            assert mock_insert.called
+            db_payload = mock_insert.call_args[0][0]
+            assert db_payload['media_url'] == "https://storage.url/document.pdf"
+            assert db_payload['extracted_media_content'] == "This is the extracted PDF content with important information."
+            assert db_payload['content'] == "PDF with content"  # Caption should remain in content field
+            assert db_payload['type'] == 'document'
+
+            # Verify n8n batching triggered
+            assert mock_n8n_batch.called
