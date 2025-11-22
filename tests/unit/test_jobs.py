@@ -730,8 +730,12 @@ class TestMediaTypeHandling:
             assert mock_media.called
             assert mock_media.call_args[1]['media_type'] == 'audio'
 
-            # Verify NO acknowledgment message for audio (fast transcription)
-            assert not mock_send_msg.called, "Audio files should not trigger acknowledgment messages"
+            # Verify acknowledgment message for audio
+            assert mock_send_msg.called
+            mock_send_msg.assert_called_once_with(
+                "1234567890@s.whatsapp.net",
+                "Let me listen to your voice note."
+            )
 
             # Verify database insertion
             assert mock_insert.called
