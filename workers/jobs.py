@@ -155,6 +155,18 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                         # Document is acceptable size - notify processing
                         send_whatsapp_message(chat_id, "Reading the doc you're sending me")
                         logger.info(f"Sent document processing notification to {chat_id}")
+                    elif message_type == "video":
+                        # Video acknowledgment
+                        send_whatsapp_message(chat_id, "Oh we don't support videos yet.")
+                        logger.info(f"Sent video acknowledgment to {chat_id}")
+                    elif message_type == "image":
+                        # Image acknowledgment
+                        send_whatsapp_message(chat_id, "Let me check out that image.")
+                        logger.info(f"Sent image acknowledgment to {chat_id}")
+                    elif message_type == "audio":
+                        # Audio acknowledgment
+                        send_whatsapp_message(chat_id, "Let me listen to your voice note.")
+                        logger.info(f"Sent audio acknowledgment to {chat_id}")
                 except Exception as e:
                     # Don't let notification failures block processing
                     logger.warning(f"Failed to send file notification: {str(e)}")

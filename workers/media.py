@@ -14,6 +14,7 @@ from tenacity import (
     retry_if_exception_type
 )
 from prompts.pdf_parsing import get_pdf_parsing_messages
+from prompts.image_parsing import get_image_parsing_messages
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +211,46 @@ def parse_pdf_with_openai(file_content: bytes, filename: str = "document.pdf") -
         raise
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=16),
+    retry=retry_if_exception_type(APIError),
+    reraise=True
+)
+def parse_image_with_openai(file_content: bytes, filename: str = "image.jpg") -> str:
+    """
+    Parse image content using OpenAI Vision API.
+
+    Args:
+        file_content: Image file bytes
+        filename: Name of the image file (for logging context)
+
+    Returns:
+        Extracted text and visual descriptions from image
+    """
+    logger.info(f"Parsing image with OpenAI Vision ({len(file_content)} bytes, filename: {filename})")
+
+    try:
+        # Convert image bytes to base64
+        base64_image = base64.b64encode(file_content).decode('utf-8')
+        logger.info(f"Converted image to base64 ({len(base64_image)} characters)")
+
+        # Use Vision API via Chat Completions
+        completion = openai_client.chat.completions.create(
+            model=settings.openai_vision_model,
+            messages=get_image_parsing_messages(base64_image)
+        )
+
+        extracted_content = completion.choices[0].message.content
+        logger.info(f"Image parsing completed: {len(extracted_content)} characters extracted")
+
+        return extracted_content if extracted_content else "[Image - no content extracted]"
+
+    except Exception as e:
+        logger.error(f"Failed to parse image with OpenAI: {str(e)}")
+        raise
+
+
 def process_media_message(
     media_id: str,
     media_type: str,
@@ -219,7 +260,7 @@ def process_media_message(
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Download media from Whapi and upload to Supabase Storage.
-    For PDFs, also parse the content using OpenAI Vision API.
+    For PDFs and images, also parse the content using OpenAI Vision API.
 
     Args:
         media_id: Whapi media ID
@@ -231,13 +272,13 @@ def process_media_message(
     Returns:
         Tuple of (public_url, parsed_content)
         - public_url: Public URL of stored media, or None if failed
-        - parsed_content: Extracted text for PDFs, or None for non-PDF files
+        - parsed_content: Extracted content for PDFs/images, or None for other media types
     """
     try:
         # Download from Whapi
         file_content, content_type = download_media_from_whapi(media_id, media_type)
 
-        # Parse PDF content if applicable
+        # Parse PDF or image content if applicable
         parsed_content = None
         if content_type == "application/pdf":
             try:
@@ -246,6 +287,17 @@ def process_media_message(
                 parsed_content = parse_pdf_with_openai(file_content, filename=f"{message_id}.pdf")
             except Exception as e:
                 logger.error(f"PDF parsing failed for {message_id}: {str(e)}")
+                # Continue with upload even if parsing fails
+                parsed_content = None
+        elif content_type in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
+            try:
+                logger.info(f"Attempting to parse image content for {message_id}")
+                # Determine file extension for better context
+                ext_map = {"image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp"}
+                extension = ext_map.get(content_type, "jpg")
+                parsed_content = parse_image_with_openai(file_content, filename=f"{message_id}.{extension}")
+            except Exception as e:
+                logger.error(f"Image parsing failed for {message_id}: {str(e)}")
                 # Continue with upload even if parsing fails
                 parsed_content = None
 
