@@ -30,3 +30,6 @@ Thumbs.db
 *.tmp.coverage
 htmlcov/
 .coverage
+
+# Test files
+test_files/
