@@ -33,3 +33,9 @@ htmlcov/
 
 # Test files
 test_files/
+
+# Claude Code / MCP
+.mcp.json
+
+# Railway CLI
+.railway/

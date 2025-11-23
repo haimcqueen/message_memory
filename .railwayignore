@@ -43,3 +43,4 @@ Thumbs.db
 test_*.py
 *_test.py
 tests/
+test_files/
