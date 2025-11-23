@@ -111,7 +111,6 @@ def insert_message(message_data: Dict[str, Any]) -> None:
         - origin: "agent" or "user"
         - type: Message type (text, voice, etc.)
         - message_sent_at: When the message was actually sent
-        - session_id: UUID
         - chat_id: WhatsApp chat ID
         - media_url: Optional URL to media file
         - whapi_message_id: Original Whapi message ID

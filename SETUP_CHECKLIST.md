@@ -46,7 +46,6 @@ CREATE TABLE messages (
   origin TEXT NOT NULL,  -- 'agent' or 'user'
   type TEXT NOT NULL,    -- 'text', 'voice', 'image', 'video', 'document', 'audio'
   message_sent_at TIMESTAMPTZ,  -- When message was actually sent
-  session_id UUID,
   chat_id TEXT NOT NULL,
   media_url TEXT,  -- URL to stored media in Supabase Storage
   whapi_message_id TEXT UNIQUE,
@@ -187,9 +186,8 @@ Your setup is complete when:
 2. ✅ Message is processed and appears in Supabase
 3. ✅ Voice messages are transcribed correctly
 4. ✅ PDF documents have text extracted and stored
-5. ✅ Session detection works (check session_id values)
-6. ✅ Failed jobs are tracked in `message_processing_jobs` table
-7. ✅ No errors in logs
+5. ✅ Failed jobs are tracked in `message_processing_jobs` table
+6. ✅ No errors in logs
 
 ## 🐛 Common Issues
 

@@ -151,7 +151,6 @@ def mock_settings():
     settings_mock.n8n_webhook_url = "https://test.n8n.cloud/webhook"
     settings_mock.n8n_webhook_api_key = "test-n8n-key"
     settings_mock.n8n_batch_delay_seconds = 60
-    settings_mock.session_timeout_hours = 24
     settings_mock.presence_typing_min_seconds = 13
     settings_mock.presence_typing_max_seconds = 18
     return settings_mock

@@ -24,8 +24,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
     This function:
     1. Determines message origin (agent vs user)
     2. Processes based on message type (text, voice, etc.)
-    3. Detects or assigns session_id
-    4. Stores message in Supabase
+    3. Stores message in Supabase
     """
     try:
         message_id = message_data["id"]

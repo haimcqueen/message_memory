@@ -18,7 +18,7 @@ def forward_to_n8n(payload: Dict[str, Any]) -> bool:
     Forward message batch to n8n webhook with retry logic.
 
     Args:
-        payload: Dictionary containing chat_id, user_id, session_id, messages, message_count
+        payload: Dictionary containing chat_id, user_id, messages, message_count
 
     Returns:
         bool: True if successful, False if all retries failed
@@ -59,7 +59,7 @@ def safe_forward_to_n8n(payload: Dict[str, Any]) -> None:
     This ensures that n8n forwarding failures don't block message processing.
 
     Args:
-        payload: Dictionary containing chat_id, user_id, session_id, messages, message_count
+        payload: Dictionary containing chat_id, user_id, messages, message_count
     """
     logger.info(f"🔵 safe_forward_to_n8n called with payload: {payload}")
     try:
