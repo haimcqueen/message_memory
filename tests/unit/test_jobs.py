@@ -283,7 +283,6 @@ class TestFileSizeValidation:
         # Mock settings with custom limit
         custom_settings = Mock()
         custom_settings.max_file_size_mb = 100  # 100MB limit instead of 50MB
-        custom_settings.session_timeout_hours = 24
 
         # 75MB document (under 100MB limit)
         file_size_bytes = 75 * 1024 * 1024

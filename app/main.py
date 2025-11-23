@@ -1,10 +1,10 @@
 """FastAPI application for WhatsApp webhook receiver."""
 import logging
 import json
-from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Request, Body
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from app.models import WhapiWebhook
+from app.models import WhapiWebhook, N8nErrorWebhook
 from utils.config import settings
 from redis import Redis
 from rq import Queue
@@ -119,7 +119,7 @@ async def debug_webhook(request: Request):
 
 @app.post("/webhook/n8n-error")
 async def n8n_error_webhook(
-    error_data: "N8nErrorWebhook",
+    error_data: N8nErrorWebhook = Body(...),
     authorization: str = Header(None)
 ):
     """
@@ -146,7 +146,7 @@ async def n8n_error_webhook(
     # Extract data from n8n payload
     mode = payload_dict.get("mode")
     workflow_url = payload_dict.get("workflow")
-    error_message = payload_dict.get("error")
+    error_message = payload_dict.get("error") or payload_dict.get("error_message")
     last_node = payload_dict.get("lastNodeExecuted")
     stack_trace = payload_dict.get("stack")
 
@@ -172,6 +172,8 @@ async def n8n_error_webhook(
 
         if error_message:
             notification_parts.append(f"\n❌ Error: {error_message}")
+        else:
+            notification_parts.append(f"\n❌ Error: Unknown error")
 
         if last_node:
             notification_parts.append(f"\n🔧 Failed Node: {last_node}")

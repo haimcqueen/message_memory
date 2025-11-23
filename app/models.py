@@ -1,6 +1,6 @@
 """Pydantic models for Whapi webhook payloads."""
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, Literal, Any
 
 
 class TextContent(BaseModel):
@@ -69,7 +69,11 @@ class WhapiWebhook(BaseModel):
 
 class N8nErrorWebhook(BaseModel):
     """n8n error webhook payload - accepts any error format from n8n."""
-    error_message: Optional[str] = None
+    mode: Optional[Any] = None
+    workflow: Optional[Any] = None
+    error: Optional[Any] = None
+    lastNodeExecuted: Optional[Any] = None
+    stack: Optional[Any] = None
     # Accept any additional fields n8n might send
     class Config:
         extra = "allow"

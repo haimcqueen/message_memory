@@ -1,6 +1,6 @@
 # WhatsApp Message Memory
 
-A production-ready FastAPI system that logs all WhatsApp messages from a business account to Supabase, with automatic voice transcription, PDF extraction, intelligent session detection, and automatic retry logic.
+A production-ready FastAPI system that logs all WhatsApp messages from a business account to Supabase, with automatic voice transcription, PDF extraction, and automatic retry logic.
 
 ## Features
 
@@ -8,7 +8,6 @@ A production-ready FastAPI system that logs all WhatsApp messages from a busines
 - Processes text, voice, image, video, document, and audio messages
 - **Transcribes voice messages** using OpenAI Whisper API
 - **Extracts text from PDFs** using OpenAI Vision API (gpt-4o-mini)
-- **Detects conversation sessions** using GPT-4
 - Stores messages in Supabase database
 - Uploads media files to Supabase Storage
 - **Background job processing** with RQ (Redis Queue)
@@ -22,7 +21,7 @@ A production-ready FastAPI system that logs all WhatsApp messages from a busines
 - **RQ + Redis** - Job queue for background processing
 - **Supabase** - Database + Storage
 - **OpenAI Whisper** - Voice transcription
-- **OpenAI GPT-4o-mini** - PDF extraction and session detection
+- **OpenAI GPT-4o-mini** - PDF extraction
 - **Tenacity** - Retry logic with exponential backoff
 - **Railway** - Deployment platform (optional)
 
@@ -37,7 +36,6 @@ message_memory/
 │   ├── jobs.py              # RQ job handlers
 │   ├── transcription.py     # Whisper API integration
 │   ├── media.py             # Media handling & PDF extraction
-│   ├── session.py           # LLM session detection
 │   ├── database.py          # Supabase operations
 │   └── retry_pending.py     # Retry worker for failed jobs
 ├── utils/
@@ -224,29 +222,15 @@ Whapi webhook receiver (requires Bearer token authentication)
    - For other media (images, videos, audio):
      - Downloads from Whapi
      - Uploads to Supabase Storage
-   - **Session Detection**:
-     - Fetches recent messages
-     - Uses GPT-4 to determine if same conversation
-     - Assigns session_id (existing or new)
 5. **Storage**: Inserts message into Supabase
 6. **Error Handling**: Failed jobs stored in `message_processing_jobs` table
 7. **Retry Logic**: Retry worker processes failed jobs with exponential backoff
-
-## Session Detection Logic
-
-1. No previous messages → New session
-2. Last message >24h ago → New session
-3. Only agent messages → Continue same session
-4. Otherwise → Ask GPT-4 if same topic
-   - Yes → Continue session
-   - No → New session
 
 ## Retry Logic
 
 All external API calls have automatic retry with exponential backoff:
 
 - **Whisper API**: 5 attempts (2s → 32s backoff)
-- **GPT-4 Session Detection**: 3 attempts (1s → 10s backoff)
 - **Supabase Operations**: 3 attempts (1s → 8s backoff)
 - **Media Download/Upload**: 3 attempts (1s → 8s backoff)
 - **PDF Extraction**: 3 attempts (2s → 16s backoff)
