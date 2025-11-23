@@ -1,5 +1,5 @@
 """Configuration management using pydantic-settings."""
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
@@ -43,9 +43,10 @@ class Settings(BaseSettings):
     # File Upload Limits
     max_file_size_mb: int = Field(default=50, alias="MAX_FILE_SIZE_MB")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False
+    )
 
 
 # Global settings instance

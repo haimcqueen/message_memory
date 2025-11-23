@@ -1,6 +1,15 @@
 """Shared pytest fixtures for all tests."""
 import pytest
+import os
 from unittest.mock import Mock, MagicMock
+
+# Set required environment variables for testing before any imports
+os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
+os.environ.setdefault("SUPABASE_KEY", "test-key")
+os.environ.setdefault("WHAPI_TOKEN", "test-token")
+os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
+os.environ.setdefault("N8N_WEBHOOK_URL", "https://test.n8n.cloud/webhook")
+os.environ.setdefault("N8N_WEBHOOK_API_KEY", "test-n8n-key")
 
 
 @pytest.fixture

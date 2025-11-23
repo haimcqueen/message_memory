@@ -1,7 +1,7 @@
 """FastAPI application for WhatsApp webhook receiver."""
 import logging
 import json
-from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Request, Body
+from fastapi import FastAPI, Header, HTTPException, Request, Body
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from app.models import WhapiWebhook, N8nErrorWebhook
@@ -55,17 +55,6 @@ async def whapi_webhook(
         webhook: Whapi webhook payload
         authorization: Bearer token for authentication
     """
-    # Verify Whapi token
-    # TODO: Re-enable auth after testing
-    # if not authorization or not authorization.startswith("Bearer "):
-    #     raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
-    #
-    # token = authorization.replace("Bearer ", "")
-    # if token != settings.whapi_token:
-    #     raise HTTPException(status_code=403, detail="Invalid Whapi token")
-
-    logger.info(f"Received authorization header: {authorization}")
-
     # Ignore status updates and other non-message webhooks
     if not webhook.messages:
         logger.info(f"Ignoring non-message webhook: {webhook.event.type}")
