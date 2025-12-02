@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     # File Upload Limits
     max_file_size_mb: int = Field(default=50, alias="MAX_FILE_SIZE_MB")
 
+    # ElevenLabs
+    elevenlabs_api_key: str = Field(..., alias="ELEVENLABS_API_KEY")
+
+    # Onboarding Storage
+    onboarding_bucket_name: str = Field(default="onboarding-call")
+
+    # n8n Persona Ideas Webhook (for transcription completion)
+    n8n_persona_ideas_webhook_url: str = Field(..., alias="N8N_PERSONA_IDEAS_WEBHOOK_URL")
+
     class Config:
         env_file = ".env"
         case_sensitive = False

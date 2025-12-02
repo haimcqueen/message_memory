@@ -4,6 +4,7 @@ import json
 from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Request, Body
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from app.models import WhapiWebhook, N8nErrorWebhook
 from utils.config import settings
 from redis import Redis
@@ -18,6 +19,31 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(title="WhatsApp Message Logger", version="0.1.0")
+
+# Add CORS middleware
+# Development origins + production Vercel domains
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
+# Add production origins if in production
+if settings.environment == "production":
+    cors_origins.extend([
+        "https://my.publyc.app",
+        "https://publyc-app.vercel.app",
+    ])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app" if settings.environment == "production" else None,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(RequestValidationError)
@@ -35,6 +61,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Initialize Redis and RQ
 redis_conn = Redis.from_url(settings.redis_url)
 message_queue = Queue("whatsapp-messages", connection=redis_conn)
+transcription_queue = Queue("transcription", connection=redis_conn)
 
 
 @app.get("/health")
@@ -198,6 +225,62 @@ async def n8n_error_webhook(
     )
 
 
+@app.post("/webhook/transcribe")
+async def transcribe_webhook(
+    request: Request,
+    authorization: str = Header(None)
+):
+    """
+    Receive transcription request and queue for processing.
+
+    Accepts two types of requests:
+    - Dual recording: {"userId": "...", "recordingType": "dual", "micUrl": "...", "systemUrl": "..."}
+    - IRL recording: {"userId": "...", "recordingType": "irl", "irlUrl": "..."}
+
+    Auth: Bearer token (N8N_WEBHOOK_API_KEY)
+    """
+    from app.models_transcription import DualRecordingRequest, IrlRecordingRequest
+
+    # Verify Bearer token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+    token = authorization.replace("Bearer ", "")
+    if token != settings.n8n_webhook_api_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    # Parse request body
+    body = await request.json()
+    recording_type = body.get("recordingType")
+
+    # Validate based on recording type
+    if recording_type == "dual":
+        validated_request = DualRecordingRequest(**body)
+    elif recording_type == "irl":
+        validated_request = IrlRecordingRequest(**body)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid recordingType. Must be 'dual' or 'irl'")
+
+    logger.info(f"Received {recording_type} transcription request for user {validated_request.userId}")
+
+    # Import here to avoid circular dependency
+    from workers.transcription_elevenlabs import process_transcription
+
+    # Enqueue job
+    job = transcription_queue.enqueue(
+        process_transcription,
+        validated_request.model_dump(),
+        job_timeout="30m"  # Transcription can take time for long recordings
+    )
+
+    logger.info(f"Job {job.id} queued for transcription (user: {validated_request.userId})")
+
+    return JSONResponse(
+        status_code=200,
+        content={"status": "queued", "job_id": job.id, "userId": validated_request.userId}
+    )
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -208,6 +291,7 @@ async def root():
             "health": "/health",
             "webhook": "/webhook/whapi",
             "n8n_error": "/webhook/n8n-error",
+            "transcribe": "/webhook/transcribe",
             "debug": "/webhook/debug"
         }
     }

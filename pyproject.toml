@@ -19,6 +19,7 @@ dependencies = [
     "supabase>=2.24.0",
     "tenacity>=9.1.2",
     "uvicorn>=0.38.0",
+    "elevenlabs>=1.0.0",
 ]
 
 [dependency-groups]
