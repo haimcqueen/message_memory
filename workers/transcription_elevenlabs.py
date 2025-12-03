@@ -131,6 +131,10 @@ def stitch_transcript(elevenlabs_response: Any, mode: str) -> str:
     """
     Convert ElevenLabs response into formatted dialog transcript.
 
+    Uses sentence-level stitching: collects all words per speaker into complete
+    sentences before allowing a speaker switch. This prevents choppy interleaving
+    when speakers overlap.
+
     Args:
         elevenlabs_response: Response from ElevenLabs API
         mode: "dual" for multichannel, "irl" for diarization
@@ -140,73 +144,143 @@ def stitch_transcript(elevenlabs_response: Any, mode: str) -> str:
     """
     logger.info(f"Stitching transcript with mode={mode}")
 
-    all_words: List[Dict[str, Any]] = []
+    # Collect sentences per speaker (not individual words)
+    # Each sentence: {"text": "...", "start": first_word_start, "end": last_word_end, "speaker": "..."}
+    agent_sentences: List[Dict[str, Any]] = []
+    user_sentences: List[Dict[str, Any]] = []
 
     if mode == "dual":
-        # Multichannel response - has transcripts array
+        # Multichannel response - process each channel separately
         if hasattr(elevenlabs_response, 'transcripts'):
             for transcript in elevenlabs_response.transcripts:
                 channel = transcript.channel_index
                 # Channel 0 = mic = agent, Channel 1 = system = user
                 speaker = "agent" if channel == 0 else "user"
+                target_list = agent_sentences if speaker == "agent" else user_sentences
+
+                # Build sentences from words
+                current_sentence: List[str] = []
+                sentence_start: float = 0.0
+                sentence_end: float = 0.0
 
                 for word in transcript.words or []:
                     if word.type == "word":
-                        all_words.append({
-                            "text": word.text,
-                            "start": word.start,
-                            "speaker": speaker
-                        })
+                        if not current_sentence:
+                            sentence_start = word.start
+                        current_sentence.append(word.text)
+                        sentence_end = getattr(word, 'end', word.start)
+
+                        # Check if this word ends a sentence
+                        if word.text and word.text[-1] in '.!?':
+                            target_list.append({
+                                "text": " ".join(current_sentence),
+                                "start": sentence_start,
+                                "end": sentence_end,
+                                "speaker": speaker
+                            })
+                            current_sentence = []
+
+                # Add any remaining words as a final segment
+                if current_sentence:
+                    target_list.append({
+                        "text": " ".join(current_sentence),
+                        "start": sentence_start,
+                        "end": sentence_end,
+                        "speaker": speaker
+                    })
         else:
             # Fallback for single channel response
             logger.warning("Expected multichannel response but got single channel")
+            current_sentence: List[str] = []
+            sentence_start: float = 0.0
+            sentence_end: float = 0.0
+
             for word in elevenlabs_response.words or []:
                 if word.type == "word":
-                    all_words.append({
-                        "text": word.text,
-                        "start": word.start,
-                        "speaker": "agent"  # Default to agent for mono
-                    })
+                    if not current_sentence:
+                        sentence_start = word.start
+                    current_sentence.append(word.text)
+                    sentence_end = getattr(word, 'end', word.start)
+
+                    if word.text and word.text[-1] in '.!?':
+                        agent_sentences.append({
+                            "text": " ".join(current_sentence),
+                            "start": sentence_start,
+                            "end": sentence_end,
+                            "speaker": "agent"
+                        })
+                        current_sentence = []
+
+            if current_sentence:
+                agent_sentences.append({
+                    "text": " ".join(current_sentence),
+                    "start": sentence_start,
+                    "end": sentence_end,
+                    "speaker": "agent"
+                })
     else:
-        # IRL mode - diarization response
+        # IRL mode - diarization response, group by speaker
+        agent_words: List[Dict[str, Any]] = []
+        user_words: List[Dict[str, Any]] = []
+
         for word in elevenlabs_response.words or []:
             if word.type == "word":
-                # speaker_0 = agent, speaker_1 = user
                 speaker_id = getattr(word, 'speaker_id', 'speaker_0')
-                speaker = "agent" if speaker_id == "speaker_0" else "user"
-
-                all_words.append({
+                target = agent_words if speaker_id == "speaker_0" else user_words
+                target.append({
                     "text": word.text,
                     "start": word.start,
+                    "end": getattr(word, 'end', word.start)
+                })
+
+        # Build sentences for each speaker
+        for words_list, speaker, target_list in [
+            (agent_words, "agent", agent_sentences),
+            (user_words, "user", user_sentences)
+        ]:
+            current_sentence: List[str] = []
+            sentence_start: float = 0.0
+            sentence_end: float = 0.0
+
+            for w in words_list:
+                if not current_sentence:
+                    sentence_start = w["start"]
+                current_sentence.append(w["text"])
+                sentence_end = w["end"]
+
+                if w["text"] and w["text"][-1] in '.!?':
+                    target_list.append({
+                        "text": " ".join(current_sentence),
+                        "start": sentence_start,
+                        "end": sentence_end,
+                        "speaker": speaker
+                    })
+                    current_sentence = []
+
+            if current_sentence:
+                target_list.append({
+                    "text": " ".join(current_sentence),
+                    "start": sentence_start,
+                    "end": sentence_end,
                     "speaker": speaker
                 })
 
-    # Sort by timestamp
-    all_words.sort(key=lambda w: w["start"])
+    # Merge and sort all sentences by start time
+    all_sentences = agent_sentences + user_sentences
+    all_sentences.sort(key=lambda s: s["start"])
 
-    # Group consecutive words by speaker
+    # Merge consecutive sentences from same speaker
     conversation: List[Dict[str, str]] = []
-    current_speaker = None
-    current_text: List[str] = []
-
-    for word in all_words:
-        if word["speaker"] != current_speaker:
-            if current_text:
-                conversation.append({
-                    "speaker": current_speaker,
-                    "text": " ".join(current_text)
-                })
-            current_speaker = word["speaker"]
-            current_text = [word["text"]]
+    for sentence in all_sentences:
+        if conversation and conversation[-1]["speaker"] == sentence["speaker"]:
+            # Same speaker - append to existing turn
+            conversation[-1]["text"] += " " + sentence["text"]
         else:
-            current_text.append(word["text"])
-
-    # Add the last segment
-    if current_text:
-        conversation.append({
-            "speaker": current_speaker,
-            "text": " ".join(current_text)
-        })
+            # New speaker - new turn
+            conversation.append({
+                "speaker": sentence["speaker"],
+                "text": sentence["text"]
+            })
 
     # Format as [agent]: text\n\n[user]: text
     formatted_lines = []
