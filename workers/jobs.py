@@ -43,8 +43,18 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         # Determine origin
         origin = "agent" if from_me else "user"
 
-        # Send typing presence for user messages
-        if origin == "user":
+        # Get subscription status early for pilot user checks (presence, messages, n8n)
+        phone_from_chat = chat_id.split("@")[0]
+        subscription_status = None
+        try:
+            subscription_status = get_subscription_status_by_phone(phone_from_chat)
+        except Exception as e:
+            logger.warning(f"Could not get subscription status for {phone_from_chat}: {e}")
+
+        is_pilot = subscription_status == "pilot"
+
+        # Send typing presence for user messages (skip for pilot users)
+        if origin == "user" and not is_pilot:
             try:
                 send_presence(chat_id, presence="typing")
             except Exception as e:
@@ -238,13 +248,6 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
         user_id = get_user_id_by_phone(customer_phone)
 
-        # Get subscription status for pilot user check
-        subscription_status = None
-        try:
-            subscription_status = get_subscription_status_by_phone(customer_phone)
-        except Exception as e:
-            logger.warning(f"Could not get subscription status for {customer_phone}: {e}")
-
         # Reject messages from unknown phone numbers (not in users table)
         if user_id is None and not from_me:
             logger.warning(
@@ -294,7 +297,6 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         insert_message(db_message)
 
         # Add to n8n batch if this is a user message, not a rejected file, and not a pilot user
-        is_pilot = subscription_status == "pilot"
         if not from_me and not skip_n8n_batch and not is_pilot:
             logger.info(f"User message detected (from_me={from_me}), adding to n8n batch")
             try:
