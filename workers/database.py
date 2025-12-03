@@ -56,6 +56,45 @@ def get_user_id_by_phone(phone_number: str) -> Optional[str]:
     wait=wait_exponential(multiplier=1, min=1, max=8),
     reraise=True
 )
+def get_subscription_status_by_phone(phone_number: str) -> Optional[str]:
+    """
+    Look up subscription_status by phone number in users table.
+
+    Args:
+        phone_number: Phone number from WhatsApp (e.g., "5551234567890")
+
+    Returns:
+        subscription_status if found, None otherwise
+    """
+    supabase = get_supabase()
+
+    logger.info(f"Looking up subscription_status for phone number: {phone_number}")
+
+    try:
+        response = supabase.table("users") \
+            .select("subscription_status") \
+            .eq("phone", phone_number) \
+            .limit(1) \
+            .execute()
+
+        if response.data and len(response.data) > 0:
+            status = response.data[0].get("subscription_status")
+            logger.info(f"Found subscription_status: {status} for phone: {phone_number}")
+            return status
+        else:
+            logger.warning(f"No user found for phone number: {phone_number}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error looking up subscription_status by phone: {str(e)}")
+        raise
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    reraise=True
+)
 def get_chat_id_by_user_id(user_id: str) -> Optional[str]:
     """
     Get the most recent chat_id for a user.

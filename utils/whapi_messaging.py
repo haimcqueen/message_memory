@@ -9,6 +9,7 @@ from tenacity import (
     retry_if_exception_type
 )
 from utils.config import settings
+from workers.database import get_subscription_status_by_phone
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,17 @@ def send_whatsapp_message(chat_id: str, message: str) -> bool:
     Returns:
         True if message was sent successfully, False otherwise
     """
+    # Check if user is a pilot user - skip sending if so
+    phone = chat_id.split("@")[0]
+    try:
+        subscription_status = get_subscription_status_by_phone(phone)
+        if subscription_status == "pilot":
+            logger.info(f"Skipping message to pilot user {chat_id}: {message[:50]}...")
+            return True  # Pretend success so callers don't treat as failure
+    except Exception as e:
+        # If we can't check subscription status, proceed with sending
+        logger.warning(f"Could not check subscription status for {phone}: {e}")
+
     url = f"{settings.whapi_api_url}/messages/text"
 
     headers = {
