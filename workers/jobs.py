@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Dict, Any
-from workers.database import insert_message, create_processing_job, get_user_id_by_phone
+from workers.database import insert_message, create_processing_job, get_user_id_by_phone, get_subscription_status_by_phone
 from workers.transcription import transcribe_voice_message
 from workers.media import process_media_message
 from workers.presence import send_presence
@@ -238,6 +238,13 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
         user_id = get_user_id_by_phone(customer_phone)
 
+        # Get subscription status for pilot user check
+        subscription_status = None
+        try:
+            subscription_status = get_subscription_status_by_phone(customer_phone)
+        except Exception as e:
+            logger.warning(f"Could not get subscription status for {customer_phone}: {e}")
+
         # Reject messages from unknown phone numbers (not in users table)
         if user_id is None and not from_me:
             logger.warning(
@@ -286,8 +293,9 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         # Insert into database
         insert_message(db_message)
 
-        # Add to n8n batch if this is a user message and not a rejected file
-        if not from_me and not skip_n8n_batch:  # Only batch user messages that aren't rejected
+        # Add to n8n batch if this is a user message, not a rejected file, and not a pilot user
+        is_pilot = subscription_status == "pilot"
+        if not from_me and not skip_n8n_batch and not is_pilot:
             logger.info(f"User message detected (from_me={from_me}), adding to n8n batch")
             try:
                 from workers.batching import add_message_to_batch
@@ -301,6 +309,8 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                 logger.error(f"Failed to add message to n8n batch: {e}")
         elif not from_me and skip_n8n_batch:
             logger.info(f"Skipping n8n batch for rejected file (message {message_id})")
+        elif not from_me and is_pilot:
+            logger.info(f"Skipping n8n batch for pilot user (message {message_id})")
 
         # If processing failed (no media_url for media types), create a processing job
         if message_type in ["voice", "image", "video", "document", "audio"] and not media_url:
