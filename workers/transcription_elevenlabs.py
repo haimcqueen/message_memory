@@ -300,7 +300,10 @@ def stitch_transcript(elevenlabs_response: Any, mode: str) -> str:
 )
 def save_transcript_to_db(user_id: str, transcript: str) -> None:
     """
-    Upsert transcript to onboarding_information table.
+    Append transcript to onboarding_information table.
+
+    If a transcript already exists, the new one is appended with a separator.
+    If no row exists, creates a new one.
 
     Args:
         user_id: User UUID
@@ -310,14 +313,30 @@ def save_transcript_to_db(user_id: str, transcript: str) -> None:
 
     logger.info(f"Saving transcript for user {user_id} ({len(transcript)} chars)")
 
-    # Upsert - update if exists, insert if not
-    supabase.table("onboarding_information").upsert(
-        {
-            "user_id": user_id,
-            "onboarding_call_transcript": transcript
-        },
-        on_conflict="user_id"
-    ).execute()
+    # Check if row exists and get current transcript
+    result = supabase.table("onboarding_information").select(
+        "onboarding_call_transcript"
+    ).eq("user_id", user_id).execute()
+
+    if result.data and len(result.data) > 0:
+        # Row exists - append to existing transcript
+        existing = result.data[0].get("onboarding_call_transcript") or ""
+        if existing:
+            new_transcript = existing + "\n\n---\n\n" + transcript
+        else:
+            new_transcript = transcript
+
+        supabase.table("onboarding_information").update(
+            {"onboarding_call_transcript": new_transcript}
+        ).eq("user_id", user_id).execute()
+    else:
+        # No row exists - insert new
+        supabase.table("onboarding_information").insert(
+            {
+                "user_id": user_id,
+                "onboarding_call_transcript": transcript
+            }
+        ).execute()
 
     logger.info(f"Successfully saved transcript for user {user_id}")
 
