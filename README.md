@@ -7,6 +7,7 @@ A production-ready FastAPI system that logs all WhatsApp messages from a busines
 - Receives Whapi WhatsApp webhooks
 - Processes text, voice, image, video, document, and audio messages
 - **Transcribes voice messages** using OpenAI Whisper API
+- **Transcribes onboarding calls** using ElevenLabs Scribe v1 (stereo dual-recording or IRL with diarization)
 - **Extracts text from PDFs** using OpenAI Vision API (gpt-4o-mini)
 - Stores messages in Supabase database
 - Uploads media files to Supabase Storage
@@ -22,6 +23,7 @@ A production-ready FastAPI system that logs all WhatsApp messages from a busines
 - **Supabase** - Database + Storage
 - **OpenAI Whisper** - Voice transcription
 - **OpenAI GPT-4o-mini** - PDF extraction
+- **ElevenLabs Scribe v1** - Onboarding call transcription
 - **Tenacity** - Retry logic with exponential backoff
 - **Railway** - Deployment platform (optional)
 
@@ -35,6 +37,7 @@ message_memory/
 ├── workers/
 │   ├── jobs.py              # RQ job handlers
 │   ├── transcription.py     # Whisper API integration
+│   ├── transcription_elevenlabs.py  # ElevenLabs call transcription
 │   ├── media.py             # Media handling & PDF extraction
 │   ├── database.py          # Supabase operations
 │   └── retry_pending.py     # Retry worker for failed jobs
@@ -59,6 +62,7 @@ message_memory/
 - Redis server
 - Supabase account and project
 - OpenAI API key
+- ElevenLabs API key
 - Whapi.cloud account
 
 ## Setup Instructions
@@ -89,7 +93,9 @@ SUPABASE_KEY=your_service_role_key_here
 WHAPI_TOKEN=your_whapi_bearer_token_here
 WHAPI_API_URL=https://gate.whapi.cloud
 OPENAI_API_KEY=sk-your_openai_api_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 REDIS_URL=redis://localhost:6379
+N8N_PERSONA_IDEAS_WEBHOOK_URL=https://your-n8n.cloud/webhook/persona-ideas
 MEDIA_BUCKET_NAME=whatsapp-media
 ENVIRONMENT=development
 ```
@@ -202,6 +208,9 @@ API information
 ### `POST /webhook`
 Whapi webhook receiver (requires Bearer token authentication)
 
+### `POST /webhook/transcribe`
+Onboarding call transcription endpoint. Accepts dual recording (mic + system URLs) or IRL recording (single URL with diarization). Queues transcription job to RQ worker.
+
 ## How It Works
 
 1. **Webhook Receipt**: FastAPI receives Whapi webhook
@@ -223,8 +232,15 @@ Whapi webhook receiver (requires Bearer token authentication)
      - Downloads from Whapi
      - Uploads to Supabase Storage
 5. **Storage**: Inserts message into Supabase
-6. **Error Handling**: Failed jobs stored in `message_processing_jobs` table
-7. **Retry Logic**: Retry worker processes failed jobs with exponential backoff
+6. **Onboarding Call Transcription** (via `/webhook/transcribe`):
+   - Downloads recordings from Supabase Storage
+   - Combines dual recordings into stereo (mic=left/agent, system=right/user)
+   - Transcribes with ElevenLabs Scribe v1 (multichannel or diarization)
+   - Uses sentence-level stitching for clean speaker turns
+   - Appends transcript to `onboarding_information` table
+   - Notifies n8n on completion
+7. **Error Handling**: Failed jobs stored in `message_processing_jobs` table
+8. **Retry Logic**: Retry worker processes failed jobs with exponential backoff
 
 ## Retry Logic
 
@@ -234,6 +250,7 @@ All external API calls have automatic retry with exponential backoff:
 - **Supabase Operations**: 3 attempts (1s → 8s backoff)
 - **Media Download/Upload**: 3 attempts (1s → 8s backoff)
 - **PDF Extraction**: 3 attempts (2s → 16s backoff)
+- **ElevenLabs Scribe**: 3 attempts (2s → 16s backoff)
 
 Failed jobs after all retries are stored in the `message_processing_jobs` table and can be retried using the retry worker.
 
@@ -310,7 +327,13 @@ redis-cli ping
 - Verify Supabase storage bucket is created and accessible
 - Check Whapi API credentials and rate limits
 
+### Onboarding call transcription failing
+
+- Verify ElevenLabs API key is valid
+- Check you have credits in ElevenLabs account
+- Ensure recordings exist in Supabase Storage
+- Check worker logs for ffmpeg errors (stereo combining)
+
 ## License
 
 MIT
-test

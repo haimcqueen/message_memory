@@ -111,7 +111,17 @@ uv run python -m workers.retry_pending
    - Uploads to Supabase Storage
    - Transcribes with OpenAI Whisper API (whisper-1)
 
-5. **Database Storage** (`workers/database.py`)
+5. **Onboarding Call Transcription** (`workers/transcription_elevenlabs.py`)
+   - Triggered via `POST /webhook/transcribe` endpoint
+   - Supports dual recording (mic + system audio) and IRL (single file with diarization)
+   - Downloads recordings from Supabase Storage
+   - Combines stereo audio using ffmpeg (preserves full duration of longest input)
+   - Transcribes with ElevenLabs Scribe v1 (multichannel or diarization mode)
+   - Uses sentence-level stitching to prevent choppy output from overlapping speech
+   - Appends transcripts to `onboarding_information` table (with `---` separator)
+   - Notifies n8n on completion
+
+6. **Database Storage** (`workers/database.py`)
    - Inserts message into `messages` table with UUID
    - Stores original Whapi message ID in `whapi_message_id` field
    - For PDFs: parsed content stored in `extracted_media_content` field
