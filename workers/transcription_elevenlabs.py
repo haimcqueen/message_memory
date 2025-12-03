@@ -62,9 +62,11 @@ def combine_stereo_opus(mic_path: Path, system_path: Path, output_path: Path) ->
         "-y",  # Overwrite output file if exists
         "-i", str(mic_path),
         "-i", str(system_path),
-        "-filter_complex", "[0:a][1:a]amerge=inputs=2[a]",
+        # Use 'join' instead of 'amerge' to preserve the longest input's duration
+        # amerge truncates to shortest, join pads the shorter with silence
+        "-filter_complex",
+        "[0:a][1:a]join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR[a]",
         "-map", "[a]",
-        "-ac", "2",
         "-c:a", "libopus",
         str(output_path)
     ]
