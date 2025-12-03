@@ -1,0 +1,4 @@
+{
+  "$schema": "https://railpack.com/schema.json",
+  "deployAptPackages": ["ffmpeg"]
+}

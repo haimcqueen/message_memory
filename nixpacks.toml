@@ -1,8 +1,0 @@
-# Nixpacks configuration for Railway deployment
-# https://nixpacks.com/docs/configuration/file
-
-[phases.setup]
-nixPkgs = ["ffmpeg"]
-
-[phases.install]
-cmds = ["uv sync"]
