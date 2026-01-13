@@ -1,0 +1,25 @@
+{
+    "id": "80d38156-b7cb-4e35-8453-f510456b5a35",
+    "user_id": "34c325a0-747c-4d4a-83af-1836da0af126",
+    "who_you_serve": {
+        "primary_audience": "Technical founders building venture-backed startups who know they need a personal brand but have zero time or expertise for content creation. Engineers, CTOs, and product leaders who can build amazing products but struggle with marketing themselves and their vision.",
+        "primary_challenges": "They know how to build but not how to sell. They have compelling stories but are too shy or constrained to tell them. They lack time to research content strategy and don't know where to start. They're missing out on deals, partnerships, and talent because of low visibility despite being interesting people with valuable insights.",
+        "secondary_audience": "Smart, ambitious people (me 5 years ago) who are heavily ambitious but not quite clear on what they want to do. People interested in AI, technology, startups, and living a fulfilling life through entrepreneurship.",
+        "secondary_challenges": "They don't have a clear vision yet and receive conflicting advice from different sources. Finding the right path is difficult as technology changes rapidly. The normal path that everybody follows might not be the best path for them. They need clarity, confidence, and direction."
+    },
+    "value_proposition": {
+        "specific_value": "I have built scalable digital products, have expertise in AI from academia and the real world. I have lived through many career situations. For my broader audience, I provide clarity, confidence, and practical insights on leveraging AI, building businesses, and living fulfillment through entrepreneurship.",
+        "unique_approach": "Radically open and transparent. Vulnerable storytelling that shares real struggles."
+    },
+    "proof_authority": {
+        "credentials": "VP of Product at Y42 (successful venture-backed company). MIT Research Affiliate in Computer Science. Data Science Retreat (NLP, ML, Deep Learning). Master's from Bocconi in Economics & Management of Innovation and Technology. Teaching Fellow in Data Engineering. Former investment team member and management consultant.",
+        "results_achieved": "Helped scale Y42 to success. For one publyc client: got featured in Germany's biggest founder magazine and largest public TV channel from one LinkedIn post. Another client: generated two quality leads for six-figure deals within two posts. Built profound expertise in machine learning, AI, and tech while staying business-savvy.",
+        "consistent_praise": "Relatable due to making many mistakes. Resourceful and authentic. Practical and business-savvy. Strong technical depth combined with strategic thinking. Ability to translate complex technical concepts into actionable business insights. Radically transparent and vulnerable in sharing learnings."
+    },
+    "boundaries": {
+        "off_limits_topics": "Pure self-congratulation without providing value. Anything that doesn't empower people who are putting themselves out there and building. Content that's not radically open and transparent. Generic startup advice without personal experience backing it up.",
+        "misaligned_content": "Hustle porn that glorifies suffering. Credential-flexing that perpetuates the 'side quest' mentality. VC worship or treating funding as validation. Generic AI hype without practical implementation insights. Content that isn't vulnerable and honest about the real struggles of entrepreneurship."
+    },
+    "version": 1,
+    "is_active": true
+}

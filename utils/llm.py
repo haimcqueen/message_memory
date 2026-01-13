@@ -32,7 +32,7 @@ def classify_message(text: str) -> str:
                 },
                 {"role": "user", "content": text}
             ],
-            temperature=0,
+            # temperature=0,  # Not supported by gpt-5-nano
             max_tokens=10
         )
         result = response.choices[0].message.content.strip().lower()
@@ -75,7 +75,7 @@ def process_persona_update(text: str, current_persona: Dict[str, Any]) -> Option
                 {"role": "system", "content": system_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.3
+            # temperature=0.3  # Not supported by gpt-5-nano
         )
         content = response.choices[0].message.content
         if not content:
@@ -86,6 +86,16 @@ def process_persona_update(text: str, current_persona: Dict[str, Any]) -> Option
         value = data.get("value")
         
         if field in fields_list and value:
+            # Try to parse value if it's a JSON string (for nested fields like boundaries)
+            if isinstance(value, str):
+                try:
+                    parsed_value = json.loads(value)
+                    # If it parses to a dict/list, use that instead
+                    if isinstance(parsed_value, (dict, list)):
+                        value = parsed_value
+                except json.JSONDecodeError:
+                    pass
+            
             return {"field": field, "value": value}
         return None
         
