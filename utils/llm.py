@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=settings.openai_api_key)
 
-MODEL_NAME = "gpt-5-nano-2025-08-07"
+MODEL_NAME = "gpt-5-mini-2025-08-07"
 
 def classify_message(text: str) -> str:
     """
@@ -33,7 +33,7 @@ def classify_message(text: str) -> str:
                 {"role": "user", "content": text}
             ],
             # temperature=0,  # Not supported by gpt-5-nano
-            max_tokens=10
+            max_completion_tokens=256
         )
         result = response.choices[0].message.content.strip().lower()
         if result not in ["fact", "persona", "neither"]:
