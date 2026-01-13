@@ -131,8 +131,8 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         if message_type == "text":
             content = message_data.get("text", {}).get("body", "")
             
-            # Check for YouTube link in text
-            if content:
+            # Check for YouTube link in text (ONLY for USER messages)
+            if content and origin == "user":
                 yt_match = re.search(YOUTUBE_REGEX, content)
                 if yt_match:
                     video_id = yt_match.group(1)
