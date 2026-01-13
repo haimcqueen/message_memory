@@ -45,6 +45,8 @@ Instructions:
    - Do NOT replace the whole field unless the new info completely supersedes it.
    - Maintain the user's existing tone and format.
    - Keep it concise but comprehensive.
-3. Return a JSON object: {{"field": "field_name", "value": "updated_full_text_for_that_field"}}
+3. Return a JSON object: {{"field": "field_name", "value": ...}}
+   - If the existing field is a STRING, return a string.
+   - If the existing field is a JSON OBJECT (e.g. voice_style, who_you_serve), return a nested JSON object matching the keys (e.g. {{"inspiration": "...", "writing_style": "..."}}). Do NOT flatten it into a string.
 4. If the info doesn't fit well or is trivial, return empty JSON {{}}.
 """
