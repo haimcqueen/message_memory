@@ -16,11 +16,16 @@ import re
 logger = logging.getLogger(__name__)
 
 # Initialize Supadata client
-# TODO: Move API key to settings/env vars in production
-supadata_client = Supadata(api_key="sd_a909fd5afcaf0e947767d35245a4c260")
+supadata_client = Supadata(api_key=settings.supadata_api_key)
 
 # Regex to match YouTube URLs (video ID is group 1)
 YOUTUBE_REGEX = r"(?:https?://)?(?:www\.)?(?:youtube\.com|youtu\.be)/(?:watch\?v=|shorts/|embed/)?([a-zA-Z0-9_-]{11})"
+
+# Generic URL Regex (simple version to catch most links)
+URL_REGEX = r"(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+
+# Domains to exclude from generic crawler (YouTube has its own handler)
+EXCLUDED_DOMAINS = ["twitter.com", "x.com", "linkedin.com", "tiktok.com", "facebook.com", "instagram.com"]
 
 
 def process_whatsapp_message(message_data: Dict[str, Any]):
@@ -100,8 +105,41 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                         else:
                             logger.warning(f"No transcript content returned for {video_id}")
                     except Exception as e:
+
                         logger.error(f"Failed to extract YouTube transcript: {e}")
                         # Don't fail the message, just log it
+                
+                # Check for generic Website link if NOT YouTube
+                else:
+                    url_match = re.search(URL_REGEX, content)
+                    if url_match:
+                        raw_url = url_match.group(0)
+                        # Check exclusions
+                        if not any(domain in raw_url.lower() for domain in EXCLUDED_DOMAINS):
+                            logger.info(f"Detected website URL: {raw_url}")
+                            try:
+                                # Normalize URL: Ensure https://www. prefix as requested
+                                # Strip existing protocol and www
+                                clean_url = re.sub(r"^https?://", "", raw_url)
+                                clean_url = re.sub(r"^www\.", "", clean_url)
+                                target_url = f"https://www.{clean_url}"
+                                
+                                logger.info(f"Scraping website: {target_url}")
+                                scrape_data = supadata_client.web.scrape(url=target_url)
+                                
+                                if scrape_data and scrape_data.content:
+                                    logger.info(f"Successfully scraped website ({len(scrape_data.content)} chars)")
+                                    extracted_media_content = scrape_data.content
+                                else:
+                                    # Send failure message
+                                    logger.warning(f"Scraping returned empty content for {target_url}")
+                                    send_whatsapp_message(chat_id, "I couldn't read that website.")
+                            except Exception as e:
+                                logger.error(f"Failed to scrape website: {e}")
+                                try:
+                                    send_whatsapp_message(chat_id, "I couldn't read that website.")
+                                except:
+                                    pass
 
         elif message_type == "link_preview":
             # Link preview messages have content in the link_preview.body field
@@ -130,6 +168,38 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                             logger.warning(f"No transcript content returned for {video_id}")
                     except Exception as e:
                         logger.error(f"Failed to extract YouTube transcript: {e}")
+
+                # Check for generic Website link if NOT YouTube
+                else:
+                    url_match = re.search(URL_REGEX, content)
+                    if url_match:
+                        raw_url = url_match.group(0)
+                        # Check exclusions
+                        if not any(domain in raw_url.lower() for domain in EXCLUDED_DOMAINS):
+                            logger.info(f"Detected website URL in link_preview: {raw_url}")
+                            try:
+                                # Normalize URL: Ensure https://www. prefix
+                                clean_url = re.sub(r"^https?://", "", raw_url)
+                                clean_url = re.sub(r"^www\.", "", clean_url)
+                                target_url = f"https://www.{clean_url}"
+                                
+                                logger.info(f"Scraping website: {target_url}")
+                                scrape_data = supadata_client.web.scrape(url=target_url)
+                                
+                                if scrape_data and scrape_data.content:
+                                    logger.info(f"Successfully scraped website ({len(scrape_data.content)} chars)")
+                                    extracted_media_content = scrape_data.content
+                                else:
+                                    # Send failure message
+                                    logger.warning(f"Scraping returned empty content for {target_url}")
+                                    send_whatsapp_message(chat_id, "I couldn't read that website.")
+                            except Exception as e:
+                                logger.error(f"Failed to scrape website: {e}")
+                                try:
+                                    send_whatsapp_message(chat_id, "I couldn't read that website.")
+                                except:
+                                    pass
+
 
         elif message_type == "voice":
             # Transcribe voice message

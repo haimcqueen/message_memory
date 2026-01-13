@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # ElevenLabs
     elevenlabs_api_key: str = Field(..., alias="ELEVENLABS_API_KEY")
 
+    # Supadata
+    supadata_api_key: str = Field(..., alias="SUPADATA_API_KEY")
+
     # Onboarding Storage
     onboarding_bucket_name: str = Field(default="onboarding-call")
 
