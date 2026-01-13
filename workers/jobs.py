@@ -10,8 +10,17 @@ from workers.media import process_media_message
 from workers.presence import send_presence
 from utils.whapi_messaging import send_whatsapp_message
 from utils.config import settings
+from supadata import Supadata
+import re
 
 logger = logging.getLogger(__name__)
+
+# Initialize Supadata client
+# TODO: Move API key to settings/env vars in production
+supadata_client = Supadata(api_key="sd_a909fd5afcaf0e947767d35245a4c260")
+
+# Regex to match YouTube URLs (video ID is group 1)
+YOUTUBE_REGEX = r"(?:https?://)?(?:www\.)?(?:youtube\.com|youtu\.be)/(?:watch\?v=|shorts/|embed/)?([a-zA-Z0-9_-]{11})"
 
 
 def process_whatsapp_message(message_data: Dict[str, Any]):
@@ -68,11 +77,59 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
         if message_type == "text":
             content = message_data.get("text", {}).get("body", "")
+            
+            # Check for YouTube link in text
+            if content:
+                yt_match = re.search(YOUTUBE_REGEX, content)
+                if yt_match:
+                    video_id = yt_match.group(1)
+                    logger.info(f"Detected YouTube video {video_id} in text message")
+                    try:
+                        # Send confirmation message
+                        send_whatsapp_message(chat_id, "let me check out the youtube video.")
+
+                        # Construct URL (Supadata handles various formats, but standardizing helps)
+                        # or just pass the full content if it's just a URL, but using ID is safer
+                        yt_url = f"https://www.youtube.com/watch?v={video_id}"
+                        logger.info(f"Fetching transcript for {yt_url}")
+                        
+                        transcript_obj = supadata_client.transcript(url=yt_url, text=True)
+                        if transcript_obj and transcript_obj.content:
+                            logger.info(f"Successfully extracted transcript for {video_id} ({len(transcript_obj.content)} chars)")
+                            extracted_media_content = transcript_obj.content
+                        else:
+                            logger.warning(f"No transcript content returned for {video_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to extract YouTube transcript: {e}")
+                        # Don't fail the message, just log it
 
         elif message_type == "link_preview":
             # Link preview messages have content in the link_preview.body field
             link_preview_data = message_data.get("link_preview") or {}
             content = link_preview_data.get("body", "")
+            
+            # Check for YouTube link in link_preview (or the message text itself if available?)
+            # Usually the URL is in 'canonicalUrl' or similar in the metadata, but here we scan body
+            if content:
+                yt_match = re.search(YOUTUBE_REGEX, content)
+                if yt_match:
+                    video_id = yt_match.group(1)
+                    logger.info(f"Detected YouTube video {video_id} in link_preview")
+                    try:
+                        # Send confirmation message
+                        send_whatsapp_message(chat_id, "let me check out the youtube video.")
+
+                        yt_url = f"https://www.youtube.com/watch?v={video_id}"
+                        logger.info(f"Fetching transcript for {yt_url}")
+                        
+                        transcript_obj = supadata_client.transcript(url=yt_url, text=True)
+                        if transcript_obj and transcript_obj.content:
+                            logger.info(f"Successfully extracted transcript for {video_id} ({len(transcript_obj.content)} chars)")
+                            extracted_media_content = transcript_obj.content
+                        else:
+                            logger.warning(f"No transcript content returned for {video_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to extract YouTube transcript: {e}")
 
         elif message_type == "voice":
             # Transcribe voice message
@@ -257,7 +314,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             try:
                 send_whatsapp_message(
                     chat_id,
-                    "Unfortunately this number is not in our database - please contact the publyc team."
+                    "Unfortunately this number is not known to us - please contact the publyc team or sign up for the waitlist at https://www.publyc.app/"
                 )
                 logger.info(f"Sent rejection message to {customer_phone}")
             except Exception as e:

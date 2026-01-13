@@ -569,6 +569,7 @@ dependencies = [
     { name = "rq" },
     { name = "rq-scheduler" },
     { name = "supabase" },
+    { name = "supadata" },
     { name = "tenacity" },
     { name = "uvicorn" },
 ]
@@ -598,6 +599,7 @@ requires-dist = [
     { name = "rq", specifier = ">=2.6.0" },
     { name = "rq-scheduler", specifier = ">=0.13.1" },
     { name = "supabase", specifier = ">=2.24.0" },
+    { name = "supadata", specifier = ">=1.5.0" },
     { name = "tenacity", specifier = ">=9.1.2" },
     { name = "uvicorn", specifier = ">=0.38.0" },
 ]
@@ -1421,6 +1423,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ff/c8/6b07d8e938bd44616304b573787f9d7033aae7f908ef60e0bc66805d56e3/supabase_functions-2.24.0.tar.gz", hash = "sha256:d98777b6433c2d916f135906685b73460f26e16a3d0c167dda0ae03e1a1f9b59", size = 4524, upload-time = "2025-11-07T17:08:21.805Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/da/d49051453766dbfdb5a086eebed7d3cb1814b6ff64ab6a90fd14edc13d46/supabase_functions-2.24.0-py3-none-any.whl", hash = "sha256:b93d79ffc446cb96faf03be550b6991847394064feec3ebf21954d3aff836d11", size = 8471, upload-time = "2025-11-07T17:08:20.943Z" },
+]
+
+[[package]]
+name = "supadata"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/11/a4/d10e3071e552d9b6d46f71e3a01cd689bc3a7860331edf68c5ecc187d9bc/supadata-1.5.0.tar.gz", hash = "sha256:e28df65cccae02035ca166ed2d9cbff13113b93117d5f168606f3a323a69d976", size = 21205, upload-time = "2025-11-20T20:16:53.411Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/f5/475177b28aacc90c76fa3e4d8bee8503a5f53e29871f7d7c0b018610a118/supadata-1.5.0-py3-none-any.whl", hash = "sha256:9ca014351f3c209d412b6e8a4845cdd65a19e3c1833a1c7db3e040e05fd575b9", size = 17143, upload-time = "2025-11-20T20:16:52.427Z" },
 ]
 
 [[package]]
