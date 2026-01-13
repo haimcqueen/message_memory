@@ -9,7 +9,8 @@ from workers.database import (
     get_subscription_status_by_phone,
     insert_message,
     get_publyc_persona,
-    update_publyc_persona_field
+    update_publyc_persona_field,
+    store_memory
 )
 from workers.transcription import transcribe_voice_message
 from workers.media import process_media_message
@@ -17,7 +18,7 @@ from workers.presence import send_presence
 from utils.whapi_messaging import send_whatsapp_message
 from utils.config import settings
 from supadata import Supadata
-from utils.llm import classify_message, process_persona_update
+from utils.llm import classify_message, process_persona_update, summarize_fact, generate_embedding
 import re
 
 logger = logging.getLogger(__name__)
@@ -211,6 +212,16 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                                     flags["persona_update"] = update
                             else:
                                 logger.warning(f"No persona found for user {user_id}, skipping update.")
+                        
+                        elif classification == "fact":
+                            # Summarize, Embed, Store
+                            summary = summarize_fact(content)
+                            embedding = generate_embedding(summary)
+                            if embedding:
+                                success = store_memory(user_id, summary, embedding)
+                                if success:
+                                    logger.info(f"Stored fact memory for user {user_id}")
+                                    flags["fact_memory"] = "stored"
                 except Exception as e:
                     logger.error(f"Error in persona learning flow: {e}")
 

@@ -99,6 +99,47 @@ def process_persona_update(text: str, current_persona: Dict[str, Any]) -> Option
             return {"field": field, "value": value}
         return None
         
+        return None
+        
     except Exception as e:
         logger.error(f"Error acting on persona update: {e}")
         return None
+
+def generate_embedding(text: str) -> list[float]:
+    """
+    Generate a vector embedding for the given text.
+    Uses text-embedding-3-small (1536 dims).
+    """
+    try:
+        response = openai_client.embeddings.create(
+            input=text,
+            model="text-embedding-3-large", # Upgraded to Large model
+            dimensions=1536 # Clamped to 1536 to match DB schema
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        logger.error(f"Error generating embedding: {e}")
+        return []
+
+def summarize_fact(text: str) -> str:
+    """
+    Summarize a user message into a concise factual statement.
+    Example: "I ran a marathon btw" -> "User ran a marathon"
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-5-mini-2025-08-07", # Use user-requested cheaper model
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "Extract the core factual claim from the user's message. Return ONLY the fact as a concise 3rd person statement. Example: 'I ran a marathon' -> 'User ran a marathon'. If the message is unclear or you cannot extract a fact, return the original message exactly."
+                },
+                {"role": "user", "content": text}
+            ],
+            max_completion_tokens=50
+        )
+        content = response.choices[0].message.content.strip()
+        return content if content else text # Fallback if empty
+    except Exception as e:
+        logger.error(f"Error summarizing fact: {e}")
+        return text  # Fallback to original text

@@ -285,6 +285,41 @@ def update_processing_job_failure(
         logger.error(f"Error updating job: {str(e)}")
         raise
 
+def store_memory(user_id: str, content: str, embedding: list[float]):
+    """
+    Store a new memory (fact) for a user.
+    """
+    supabase = get_supabase()
+    try:
+        supabase.table("memories").insert({
+            "user_id": user_id,
+            "content": content,
+            "embedding": embedding
+        }).execute()
+        return True
+    except Exception as e:
+        logger.error(f"Error storing memory: {e}")
+        return False
+
+def search_memories(user_id: str, query_embedding: list[float], limit: int = 5) -> list[dict]:
+    """
+    Search for memories similar to the query embedding.
+    """
+    supabase = get_supabase() # Added this line as it was missing in the snippet
+    logger.info(f"Searching memories for user_id: {user_id}") # Added this line for logging
+
+    try:
+        response = supabase.rpc("match_memories", {
+            "query_embedding": query_embedding,
+            "match_threshold": 0.35, # Lowered from 0.5 for better recall
+            "match_count": limit,
+            "p_user_id": user_id
+        }).execute()
+        return response.data
+    except Exception as e:
+        logger.error(f"Error searching memories: {e}")
+        return []
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=8),

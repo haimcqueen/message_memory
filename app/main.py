@@ -5,6 +5,7 @@ from fastapi import FastAPI, Header, HTTPException, BackgroundTasks, Request, Bo
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from app.models import WhapiWebhook, N8nErrorWebhook
 from utils.config import settings
 from redis import Redis
@@ -282,6 +283,56 @@ async def transcribe_webhook(
         content={"status": "queued", "job_id": job.id, "userId": validated_request.userId}
     )
 
+    return JSONResponse(
+        status_code=200,
+        content={"status": "queued", "job_id": job.id, "userId": validated_request.userId}
+    )
+
+
+class MemorySearchRequest(BaseModel):
+    user_id: str
+    query: str
+    limit: int = 5
+
+
+@app.post("/api/v1/memory/search")
+async def search_memory_endpoint(
+    request: MemorySearchRequest,
+    authorization: str = Header(None)
+):
+    """
+    Search for relevant facts/memories for a user.
+    """
+    # Verify auth (using n8n key for simplicity for now, or add a new one)
+    if not authorization or not authorization.startswith("Bearer "):
+         raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+    
+    token = authorization.replace("Bearer ", "")
+    # Allow either Whapi or N8n token for now
+    if token != settings.n8n_webhook_api_key and token != settings.whapi_token:
+         raise HTTPException(status_code=403, detail="Invalid API key")
+
+    # Import helper functions
+    from workers.database import search_memories
+    from utils.llm import generate_embedding
+
+    try:
+        # 1. Generate embedding for the query
+        query_vector = generate_embedding(request.query)
+        if not query_vector:
+             return JSONResponse(status_code=500, content={"error": "Failed to generate embedding"})
+
+        # 2. Search DB
+        results = search_memories(request.user_id, query_vector, limit=request.limit)
+
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "results": results}
+        )
+    except Exception as e:
+        logger.error(f"Search API error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/")
 async def root():
@@ -294,6 +345,7 @@ async def root():
             "webhook": "/webhook/whapi",
             "n8n_error": "/webhook/n8n-error",
             "transcribe": "/webhook/transcribe",
-            "debug": "/webhook/debug"
+            "debug": "/webhook/debug",
+            "search": "/api/v1/memory/search"
         }
     }
