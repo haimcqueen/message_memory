@@ -96,6 +96,17 @@ def process_persona_update(text: str, current_persona: Dict[str, Any]) -> Option
                 except json.JSONDecodeError:
                     pass
             
+            # CRITICAL SAFETY GUARDRAIL
+            # If the EXISTING field is a dictionary, strictly allow only dictionary updates.
+            # This prevents accidental flattening of structured fields (like voice_style) into strings.
+            current_field_value = current_persona.get(field)
+            if isinstance(current_field_value, dict) and not isinstance(value, dict):
+                logger.error(
+                    f"SAFETY BLOCK: Attempted to overwrite dict field '{field}' with type {type(value)}. "
+                    f"Rejecting flattened update to preserve data structure."
+                )
+                return None
+            
             return {"field": field, "value": value}
         return None
         
