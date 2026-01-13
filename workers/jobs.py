@@ -4,13 +4,20 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Dict, Any
-from workers.database import insert_message, create_processing_job, get_user_id_by_phone, get_subscription_status_by_phone
+from workers.database import (
+    get_user_id_by_phone,
+    get_subscription_status_by_phone,
+    insert_message,
+    get_publyc_persona,
+    update_publyc_persona_field
+)
 from workers.transcription import transcribe_voice_message
 from workers.media import process_media_message
 from workers.presence import send_presence
 from utils.whapi_messaging import send_whatsapp_message
 from utils.config import settings
 from supadata import Supadata
+from utils.llm import classify_message, process_persona_update
 import re
 
 logger = logging.getLogger(__name__)
@@ -57,6 +64,46 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         # Determine origin
         origin = "agent" if from_me else "user"
 
+        # Look up internal user_id by phone number
+        # For user messages: user_id = sender (the customer)
+        # For agent messages: user_id = receiver (extracted from chat_id)
+        if from_me:
+            # Agent message: get customer phone from chat_id
+            # chat_id format: "4915202618514@s.whatsapp.net"
+            customer_phone = chat_id.split("@")[0]
+            logger.info(f"Agent message - looking up receiver: {customer_phone}")
+        else:
+            # User message: get customer phone from "from" field
+            customer_phone = message_data.get("from")
+            logger.info(f"User message - looking up sender: {customer_phone}")
+
+        user_id = get_user_id_by_phone(customer_phone)
+
+        # Reject messages from unknown phone numbers (not in users table)
+        if user_id is None and not from_me:
+            logger.warning(
+                f"Rejecting message from unknown phone number: {customer_phone}. "
+                f"Number not found in users table."
+            )
+            try:
+                send_whatsapp_message(
+                    chat_id,
+                    "Unfortunately this number is not known to us - please contact the publyc team or sign up for the waitlist at https://www.publyc.app/"
+                )
+                logger.info(f"Sent rejection message to {customer_phone}")
+            except Exception as e:
+                logger.error(f"Failed to send rejection message to {customer_phone}: {e}")
+
+            # Exit early - do not insert to database or trigger n8n batching
+            return
+
+        # Skip database insertion for agent messages to unknown users
+        if user_id is None and from_me:
+            logger.info(
+                f"Skipping database insertion for agent message to unknown user: {customer_phone}"
+            )
+            return
+
         # Get subscription status early for pilot user checks (presence, messages, n8n)
         phone_from_chat = chat_id.split("@")[0]
         subscription_status = None
@@ -79,6 +126,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         media_url = None
         extracted_media_content = None  # For storing parsed PDF content
         skip_n8n_batch = False  # Flag to skip n8n batching for rejected files
+        flags = {}  # Initialize flags for message classification/tagging
 
         if message_type == "text":
             content = message_data.get("text", {}).get("body", "")
@@ -105,7 +153,6 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                         else:
                             logger.warning(f"No transcript content returned for {video_id}")
                     except Exception as e:
-
                         logger.error(f"Failed to extract YouTube transcript: {e}")
                         # Don't fail the message, just log it
                 
@@ -140,6 +187,32 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
                                     send_whatsapp_message(chat_id, "I couldn't read that website.")
                                 except:
                                     pass
+
+                try:
+                    # Persona Learning: Classify and update
+                    if origin == "user":
+                        classification = classify_message(content)
+                        flags["classification"] = classification
+                        logger.info(f"Message classified as: {classification}")
+                        
+                        if classification == "persona":
+                            # Fetch current persona
+                            current_persona = get_publyc_persona(user_id)
+                            if current_persona:
+                                # Determine update
+                                update = process_persona_update(content, current_persona)
+                                if update:
+                                    # Execute update
+                                    field = update["field"]
+                                    value = update["value"]
+                                    update_publyc_persona_field(user_id, field, value)
+                                    logger.info(f"Updated persona field {field} for user {user_id}")
+                                    # Add update info to flags for traceability
+                                    flags["persona_update"] = update
+                            else:
+                                logger.warning(f"No persona found for user {user_id}, skipping update.")
+                except Exception as e:
+                    logger.error(f"Error in persona learning flow: {e}")
 
         elif message_type == "link_preview":
             # Link preview messages have content in the link_preview.body field
@@ -360,47 +433,6 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             logger.warning(f"Unsupported message type: {message_type}")
             content = f"Unsupported message type: {message_type}"
 
-        # Look up internal user_id by phone number
-        # For user messages: user_id = sender (the customer)
-        # For agent messages: user_id = receiver (extracted from chat_id)
-        if from_me:
-            # Agent message: get customer phone from chat_id
-            # chat_id format: "4915202618514@s.whatsapp.net"
-            customer_phone = chat_id.split("@")[0]
-            logger.info(f"Agent message - looking up receiver: {customer_phone}")
-        else:
-            # User message: get customer phone from "from" field
-            customer_phone = message_data.get("from")
-            logger.info(f"User message - looking up sender: {customer_phone}")
-
-        user_id = get_user_id_by_phone(customer_phone)
-
-        # Reject messages from unknown phone numbers (not in users table)
-        if user_id is None and not from_me:
-            logger.warning(
-                f"Rejecting message from unknown phone number: {customer_phone}. "
-                f"Number not found in users table."
-            )
-            try:
-                send_whatsapp_message(
-                    chat_id,
-                    "Unfortunately this number is not known to us - please contact the publyc team or sign up for the waitlist at https://www.publyc.app/"
-                )
-                logger.info(f"Sent rejection message to {customer_phone}")
-            except Exception as e:
-                logger.error(f"Failed to send rejection message to {customer_phone}: {e}")
-
-            # Exit early - do not insert to database or trigger n8n batching
-            return
-
-        # Skip database insertion for agent messages to unknown users
-        # These are rejection messages sent to users not in our database
-        if user_id is None and from_me:
-            logger.info(
-                f"Skipping database insertion for agent message to unknown user: {customer_phone}"
-            )
-            return
-
         # Convert Unix timestamp to ISO format string for Supabase
         # WhatsApp timestamp is in seconds since epoch
         message_sent_at = datetime.fromtimestamp(timestamp).isoformat()
@@ -418,6 +450,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
             "media_url": media_url,
             "whapi_message_id": message_id,
             "extracted_media_content": extracted_media_content,  # For PDF parsed content
+            "flags": flags,  # Message classification info
         }
 
         # Insert into database

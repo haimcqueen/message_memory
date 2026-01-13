@@ -284,3 +284,65 @@ def update_processing_job_failure(
     except Exception as e:
         logger.error(f"Error updating job: {str(e)}")
         raise
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    reraise=True
+)
+def get_publyc_persona(user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get the publyc_persona for a user.
+    
+    Args:
+        user_id: Internal user ID
+        
+    Returns:
+        Persona dict if found, None otherwise
+    """
+    supabase = get_supabase()
+    logger.info(f"Fetching publyc_persona for user_id: {user_id}")
+    
+    try:
+        response = supabase.table("publyc_personas") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .limit(1) \
+            .execute()
+            
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error fetching publyc_persona: {str(e)}")
+        raise
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    reraise=True
+)
+def update_publyc_persona_field(user_id: str, field: str, value: str) -> None:
+    """
+    Update a specific field in the publyc_personas table.
+    
+    Args:
+        user_id: Internal user ID
+        field: The column name to update
+        value: The new value
+    """
+    supabase = get_supabase()
+    logger.info(f"Updating publyc_persona field '{field}' for user_id: {user_id}")
+    
+    try:
+        supabase.table("publyc_personas") \
+            .update({field: value, "updated_at": datetime.utcnow().isoformat()}) \
+            .eq("user_id", user_id) \
+            .execute()
+        logger.info(f"Successfully updated publyc_persona field '{field}'")
+        
+    except Exception as e:
+        logger.error(f"Error updating publyc_persona: {str(e)}")
+        raise
