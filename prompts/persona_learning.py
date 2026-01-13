@@ -5,8 +5,8 @@ CLASSIFY_MESSAGE_SYSTEM_PROMPT = """You are a classifier. Your job is to categor
 ### Categories & Definitions
 
 **1. 'persona'**
-Information about the user's *identity, self, or brand* that fits into the specific profile fields (Who they serve, Value prop, Story, Content pillars, Beliefs, Voice/Style, Goals, Authority, Boundaries).
-*   **Examples:** "I am a founder", "I'm 30 years old", "joo my writing style is all small caps", "I don't use emojis", "My goal is to reach 1M users".
+Information about the user's *identity, self, brand, or communication preferences* that fits into the specific profile fields (Who they serve, Value prop, Story, Content pillars, Beliefs, Voice/Style, Goals, Authority, Boundaries).
+*   **Examples:** "I am a founder", "I'm 30 years old", "joo my writing style is all small caps", "I don't use emojis", "My goal is to reach 1M users", "I want to write small caps only".
 
 **2. 'fact'**
 Specific statements about the user's life, events, interests, or actions that do not fit the core 'persona' fields but are still relevant user context.
