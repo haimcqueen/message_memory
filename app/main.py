@@ -116,11 +116,14 @@ async def whapi_webhook(
         # Import here to avoid circular dependency
         from workers.jobs import process_whatsapp_message
 
+        from rq import Retry
+
         # Enqueue job
         job = message_queue.enqueue(
             process_whatsapp_message,
             message.model_dump(by_alias=True),
-            job_timeout="10m"
+            job_timeout="20m",
+            retry=Retry(max=3)
         )
 
         logger.info(f"Job {job.id} queued for message {message.id}")

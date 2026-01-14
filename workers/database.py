@@ -181,6 +181,40 @@ def insert_message(message_data: Dict[str, Any]) -> None:
     wait=wait_exponential(multiplier=1, min=1, max=8),
     reraise=True
 )
+def update_message_content(message_id: str, content: str = None, media_url: str = None, extracted_media_content: str = None) -> None:
+    """
+    Update message content/media_url after processing (e.g. transcription).
+    """
+    supabase = get_supabase()
+    logger.info(f"Updating message {message_id} with new content/media")
+
+    updates = {}
+    if content is not None:
+        updates["content"] = content
+    if media_url is not None:
+        updates["media_url"] = media_url
+    if extracted_media_content is not None:
+        updates["extracted_media_content"] = extracted_media_content
+        
+    if not updates:
+        return
+
+    try:
+        supabase.table("messages") \
+            .update(updates) \
+            .eq("id", message_id) \
+            .execute()
+        logger.info(f"Successfully updated message {message_id}")
+    except Exception as e:
+        logger.error(f"Error updating message {message_id}: {e}")
+        raise
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    reraise=True
+)
 def create_processing_job(
     message_id: str,
     webhook_payload: Dict[str, Any],

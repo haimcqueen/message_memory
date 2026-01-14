@@ -34,7 +34,7 @@ def download_voice_file(voice_url: str, output_path: Path) -> None:
     """
     logger.info(f"Downloading voice file from {voice_url}")
 
-    response = httpx.get(voice_url, timeout=30.0, follow_redirects=True)
+    response = httpx.get(voice_url, timeout=300.0, follow_redirects=True)
     response.raise_for_status()
 
     with open(output_path, "wb") as f:
