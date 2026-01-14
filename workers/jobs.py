@@ -120,19 +120,19 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         
         # Extract basic text body if available (for text/link_preview)
         # For media, use caption or pending placeholder
-        raw_text_body = message_data.get("text", {}).get("body", "")
+        raw_text_body = (message_data.get("text") or {}).get("body", "")
         
         if message_type == "text":
             initial_content = raw_text_body
         elif message_type == "link_preview":
              # link_preview body is usually the description/content
-             initial_content = message_data.get("link_preview", {}).get("body", "")
+             initial_content = (message_data.get("link_preview") or {}).get("body", "")
         elif message_type in ["voice", "audio"]:
             initial_content = f"[Transcribing {message_type} ({message_id})...]"
         elif message_type in ["image", "video", "document"]:
-             caption = message_data.get(message_type, {}).get("caption", "")
+             caption = (message_data.get(message_type) or {}).get("caption", "")
              if not caption and message_type == "short":
-                 caption = message_data.get("short", {}).get("caption", "")
+                 caption = (message_data.get("short") or {}).get("caption", "")
              
              initial_content = caption if caption else f"[{message_type.title()} message pending processing...]"
         else:
@@ -246,7 +246,7 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
 
         # VOICE Processing
         elif message_type == "voice":
-            voice_data = message_data.get("voice", {})
+            voice_data = message_data.get("voice") or {}
             voice_url = voice_data.get("link")
             
             if not voice_url:
@@ -268,9 +268,14 @@ def process_whatsapp_message(message_data: Dict[str, Any]):
         elif message_type in ["image", "video", "document", "audio"]:
             # Logic for media download/upload
             media_data = message_data.get(message_type)
-            if not media_data and message_type == "video" and message_data.get("short"):
+            # Check both the message_type field and "short" for videos
+            media_data = None
+            if message_data.get("type") == "short" and message_data.get("short"):
                 media_data = message_data.get("short")
+            elif message_data.get(message_type):
+                media_data = message_data.get(message_type)
             
+            # If media_data is None or empty dict, default to empty dict
             if not media_data:
                 media_data = {}
             
