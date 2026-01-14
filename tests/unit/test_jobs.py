@@ -343,7 +343,7 @@ class TestFileSizeValidation:
             # Should send rejection message
             assert mock_send_msg.called, "Should send rejection message to unknown number"
             rejection_message = mock_send_msg.call_args[0][1]
-            assert "not in our database" in rejection_message.lower(), \
+            assert "not known to us" in rejection_message.lower(), \
                 "Rejection message should indicate number not in database"
             assert "contact the publyc team" in rejection_message.lower(), \
                 "Rejection message should tell them to contact publyc"
@@ -464,6 +464,7 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             # Mock media processing to return storage URL and parsed content
@@ -473,21 +474,26 @@ class TestMediaTypeHandling:
 
             # Verify media was processed
             assert mock_media.called, "Image should be processed"
-            assert mock_media.call_args[1]['media_type'] == 'image'
-            assert mock_media.call_args[1]['media_id'] == 'media-id-image'
+            # process_media_message args: media_id, message_type, chat_id, message_id, mime_type
+            assert mock_media.call_args[0][1] == 'image'
+            assert mock_media.call_args[0][0] == 'media-id-image'
 
             # Verify correct acknowledgment message
             assert mock_send_msg.called
             notification = mock_send_msg.call_args[0][1]
             assert "let me check out that image" in notification.lower()
 
-            # Verify database insertion with media_url and extracted_media_content
+            # Verify INITIAL database insertion (placeholder)
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
-            assert db_payload['media_url'] == "https://storage.url/image.jpg"
-            assert db_payload['type'] == 'image'
-            assert db_payload['content'] == "Check this out!"
-            assert db_payload['extracted_media_content'] == "<image>\nA beautiful sunset over the ocean\n</image>"
+            assert db_payload['media_url'] is None
+            
+            # Verify UPDATE with final data
+            assert mock_update.called
+            # args: message_id, content, media_url, extracted, flags
+            call_args = mock_update.call_args[0]
+            assert call_args[2] == "https://storage.url/image.jpg"
+            assert call_args[3] == "<image>\nA beautiful sunset over the ocean\n</image>"
 
             # Verify n8n batching triggered
             assert mock_n8n_batch.called
@@ -518,7 +524,8 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.database.create_processing_job') as mock_job, \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
@@ -531,11 +538,15 @@ class TestMediaTypeHandling:
             notification = mock_send_msg.call_args[0][1]
             assert "we don't support media of this size" in notification.lower()
 
-            # Verify database insertion with NO media_url
+            # Verify INITIAL database insertion (placeholder)
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
             assert db_payload['media_url'] is None
-            assert "too large" in db_payload['content'].lower()
+
+            # Verify UPDATE with error content
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert "too large" in call_args[1].lower() # content
 
             # Verify n8n batching NOT triggered
             assert not mock_n8n_batch.called
@@ -571,6 +582,7 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             # Mock media processing to return both URL and extracted content
@@ -580,15 +592,20 @@ class TestMediaTypeHandling:
 
             # Verify media was processed
             assert mock_media.called
-            assert mock_media.call_args[1]['media_type'] == 'image'
+            assert mock_media.call_args[0][1] == 'image'
 
-            # Verify database insertion includes extracted_media_content
+            # Verify INITIAL database insertion (placeholder)
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
-            assert db_payload['media_url'] == "https://storage.url/screenshot.jpg"
-            assert db_payload['extracted_media_content'] == extracted_content
-            assert '<image>' in db_payload['extracted_media_content']
-            assert 'Hello World' in db_payload['extracted_media_content']
+            assert db_payload['media_url'] is None
+
+            # Verify UPDATE with extracted content
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            # args: message_id, content, media_url, extracted, flags
+            assert call_args[2] == "https://storage.url/screenshot.jpg"
+            assert call_args[3] == extracted_content
+            assert '<image>' in call_args[3]
 
             # Verify n8n batching triggered with extracted content
             assert mock_n8n_batch.called
@@ -619,6 +636,7 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             mock_media.return_value = ("https://storage.url/video.mp4", None)
@@ -627,18 +645,22 @@ class TestMediaTypeHandling:
 
             # Verify media was processed
             assert mock_media.called
-            assert mock_media.call_args[1]['media_type'] == 'video'
+            assert mock_media.call_args[0][1] == 'video'
 
             # Verify correct acknowledgment message
             assert mock_send_msg.called
             notification = mock_send_msg.call_args[0][1]
             assert "oh we don't support videos yet" in notification.lower()
 
-            # Verify database insertion
+            # Verify INITIAL database insertion
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
-            assert db_payload['media_url'] == "https://storage.url/video.mp4"
-            assert db_payload['type'] == 'video'
+            assert db_payload['media_url'] is None
+
+            # Verify UPDATE
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert call_args[2] == "https://storage.url/video.mp4"
 
             # Verify n8n batching triggered
             assert mock_n8n_batch.called
@@ -669,7 +691,8 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.database.create_processing_job') as mock_job, \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
@@ -682,10 +705,15 @@ class TestMediaTypeHandling:
             notification = mock_send_msg.call_args[0][1]
             assert "we don't support media of this size" in notification.lower()
 
-            # Verify database insertion
+            # Verify INITIAL database insertion (placeholder)
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
             assert db_payload['media_url'] is None
+
+            # Verify UPDATE with error content (too large)
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert "too large" in call_args[1].lower()
 
             # Verify n8n batching NOT triggered
             assert not mock_n8n_batch.called
@@ -719,6 +747,7 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             mock_media.return_value = ("https://storage.url/audio.ogg", None)
@@ -727,7 +756,7 @@ class TestMediaTypeHandling:
 
             # Verify media was processed
             assert mock_media.called
-            assert mock_media.call_args[1]['media_type'] == 'audio'
+            assert mock_media.call_args[0][1] == 'audio'
 
             # Verify acknowledgment message for audio
             assert mock_send_msg.called
@@ -736,11 +765,15 @@ class TestMediaTypeHandling:
                 "Let me listen to your voice note."
             )
 
-            # Verify database insertion
+            # Verify INITIAL database insertion
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
-            assert db_payload['media_url'] == "https://storage.url/audio.ogg"
-            assert db_payload['type'] == 'audio'
+            assert db_payload['media_url'] is None
+
+            # Verify UPDATE
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert call_args[2] == "https://storage.url/audio.ogg"
 
             # Verify n8n batching triggered
             assert mock_n8n_batch.called
@@ -771,7 +804,8 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.database.create_processing_job') as mock_job, \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
@@ -784,10 +818,15 @@ class TestMediaTypeHandling:
             notification = mock_send_msg.call_args[0][1]
             assert "we don't support media of this size" in notification.lower()
 
-            # Verify database insertion
+            # Verify INITIAL database insertion (placeholder)
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
             assert db_payload['media_url'] is None
+
+            # Verify UPDATE with error content
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert "too large" in call_args[1].lower()
 
             # Verify n8n batching NOT triggered
             assert not mock_n8n_batch.called
@@ -821,6 +860,7 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             mock_media.return_value = ("https://storage.url/document.pdf", "Parsed PDF content goes here")
@@ -829,18 +869,22 @@ class TestMediaTypeHandling:
 
             # Verify media was processed
             assert mock_media.called
-            assert mock_media.call_args[1]['media_type'] == 'document'
+            assert mock_media.call_args[0][1] == 'document'
 
             # Verify correct acknowledgment message
             assert mock_send_msg.called
             notification = mock_send_msg.call_args[0][1]
             assert "reading the doc" in notification.lower()
 
-            # Verify database insertion
+            # Verify INITIAL database insertion
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
-            assert db_payload['media_url'] == "https://storage.url/document.pdf"
-            assert db_payload['type'] == 'document'
+            assert db_payload['media_url'] is None
+
+            # Verify UPDATE
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert call_args[2] == "https://storage.url/document.pdf"
 
             # Verify n8n batching triggered
             assert mock_n8n_batch.called
@@ -871,7 +915,8 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
-             patch('workers.jobs.create_processing_job') as mock_job, \
+             patch('workers.database.create_processing_job') as mock_job, \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             process_whatsapp_message(webhook_data)
@@ -884,10 +929,15 @@ class TestMediaTypeHandling:
             notification = mock_send_msg.call_args[0][1]
             assert "we don't support media of this size" in notification.lower()
 
-            # Verify database insertion
+            # Verify INITIAL database insertion (placeholder)
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
             assert db_payload['media_url'] is None
+
+            # Verify UPDATE with error content (too large)
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert "too large" in call_args[1].lower()
 
             # Verify n8n batching NOT triggered
             assert not mock_n8n_batch.called
@@ -921,6 +971,7 @@ class TestMediaTypeHandling:
              patch('workers.jobs.process_media_message') as mock_media, \
              patch('workers.jobs.insert_message') as mock_insert, \
              patch('workers.jobs.get_user_id_by_phone', return_value="user-123"), \
+             patch('workers.database.update_message_content') as mock_update, \
              patch('workers.batching.add_message_to_batch') as mock_n8n_batch:
 
             # Mock media processing to return both storage URL and parsed content
@@ -931,13 +982,16 @@ class TestMediaTypeHandling:
             # Verify media was processed
             assert mock_media.called
 
-            # Verify database insertion with extracted content
+            # Verify INITIAL database insertion
             assert mock_insert.called
             db_payload = mock_insert.call_args[0][0]
-            assert db_payload['media_url'] == "https://storage.url/document.pdf"
-            assert db_payload['extracted_media_content'] == "This is the extracted PDF content with important information."
-            assert db_payload['content'] == "PDF with content"  # Caption should remain in content field
-            assert db_payload['type'] == 'document'
+            assert db_payload['media_url'] is None
+
+            # Verify UPDATE with extracted content
+            assert mock_update.called
+            call_args = mock_update.call_args[0]
+            assert call_args[2] == "https://storage.url/document.pdf" # media_url
+            assert call_args[3] == "This is the extracted PDF content with important information." # extracted
 
             # Verify n8n batching triggered
             assert mock_n8n_batch.called

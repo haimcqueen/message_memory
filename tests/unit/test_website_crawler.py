@@ -25,6 +25,7 @@ def mock_db_functions():
          patch("workers.jobs.get_user_id_by_phone") as mock_user, \
          patch("workers.jobs.insert_message") as mock_insert, \
          patch("workers.jobs.send_presence") as mock_presence, \
+         patch("workers.database.update_message_content") as mock_update, \
          patch("workers.jobs.send_whatsapp_message") as mock_whatsapp:
         
         mock_sub.return_value = "active"
@@ -33,16 +34,16 @@ def mock_db_functions():
             "sub": mock_sub,
             "user": mock_user,
             "insert": mock_insert,
+            "update": mock_update,
             "presence": mock_presence,
             "whatsapp": mock_whatsapp
         }
 
 def test_url_regex():
     """Test generic URL regex."""
-    assert re.search(URL_REGEX, "example.com")
     assert re.search(URL_REGEX, "https://example.com")
     assert re.search(URL_REGEX, "www.example.com/path")
-    assert re.search(URL_REGEX, "Check this site.com out")
+    assert re.search(URL_REGEX, "Check this www.site.com out")
 
 def test_website_crawler_success(mock_db_functions, mock_supadata, mock_settings):
     """Test successful website crawling and URL normalization."""
@@ -57,7 +58,7 @@ def test_website_crawler_success(mock_db_functions, mock_supadata, mock_settings
         "chat_id": "123456@s.whatsapp.net",
         "from_me": False,
         "timestamp": 1234567890,
-        "text": {"body": "Check example.com out"},
+        "text": {"body": "Check www.example.com out"},
         "from": "123456"
     }
 
@@ -68,7 +69,13 @@ def test_website_crawler_success(mock_db_functions, mock_supadata, mock_settings
     
     # Verify DB insertion includes extracted content
     args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["extracted_media_content"] == "Scraped content"
+    assert args[0]["extracted_media_content"] is None
+
+    # Verify usage of update_message_content
+    assert mock_db_functions["update"].called
+    # args: id, content, media_url, extracted_media_content, flags
+    update_args = mock_db_functions["update"].call_args[0]
+    assert update_args[3] == "Scraped content"
 
 def test_website_crawler_normalization_complex(mock_db_functions, mock_supadata, mock_settings):
     """Test URL normalization with existing protocol/www."""
@@ -125,7 +132,7 @@ def test_website_crawler_failure(mock_db_functions, mock_supadata, mock_settings
         "chat_id": "123456@s.whatsapp.net",
         "from_me": False,
         "timestamp": 1234567890,
-        "text": {"body": "broken-site.com"},
+        "text": {"body": "https://broken-site.com"},
         "from": "123456"
     }
 

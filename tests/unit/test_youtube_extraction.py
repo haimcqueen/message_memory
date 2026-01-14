@@ -24,6 +24,7 @@ def mock_db_functions():
          patch("workers.jobs.get_user_id_by_phone") as mock_user, \
          patch("workers.jobs.insert_message") as mock_insert, \
          patch("workers.jobs.send_presence") as mock_presence, \
+         patch("workers.database.update_message_content") as mock_update, \
          patch("workers.jobs.send_whatsapp_message") as mock_whatsapp:
         
         mock_sub.return_value = "active"
@@ -32,6 +33,7 @@ def mock_db_functions():
             "sub": mock_sub,
             "user": mock_user,
             "insert": mock_insert,
+            "update": mock_update,
             "presence": mock_presence,
             "whatsapp": mock_whatsapp
         }
@@ -71,7 +73,13 @@ def test_youtube_extraction_text(mock_db_functions, mock_supadata, mock_settings
     
     # Verify DB insertion includes extracted content
     args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["extracted_media_content"] == "This is a transcript."
+    assert args[0]["extracted_media_content"] is None
+
+    # Verify usage of update_message_content
+    assert mock_db_functions["update"].called
+    # args: id, content, media_url, extracted, flags
+    update_args = mock_db_functions["update"].call_args[0]
+    assert update_args[3] == "This is a transcript."
 
 def test_youtube_extraction_link_preview(mock_db_functions, mock_supadata, mock_settings):
     """Test transcript extraction from link_preview message."""
@@ -99,9 +107,14 @@ def test_youtube_extraction_link_preview(mock_db_functions, mock_supadata, mock_
     # Verify Supadata called
     mock_supadata.transcript.assert_called_with(url="https://www.youtube.com/watch?v=xyz123abc45", text=True)
     
-    # Verify DB insertion
+    # Verify DB insertion in place
     args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["extracted_media_content"] == "Preview transcript."
+    assert args[0]["extracted_media_content"] is None
+
+    # Verify usage of update_message_content
+    assert mock_db_functions["update"].called
+    update_args = mock_db_functions["update"].call_args[0]
+    assert update_args[3] == "Preview transcript."
 
 def test_youtube_no_transcript_found(mock_db_functions, mock_supadata, mock_settings):
     """Test handling when no transcript is found."""
