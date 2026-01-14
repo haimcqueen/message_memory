@@ -347,7 +347,7 @@ def search_memories(user_id: str, query_embedding: list[float], limit: int = 5) 
     try:
         response = supabase.rpc("match_memories", {
             "query_embedding": query_embedding,
-            "match_threshold": 0.35, # Lowered from 0.5 for better recall
+            "match_threshold": 0.3, # Lowered from 0.35 for better recall
             "match_count": limit,
             "p_user_id": user_id
         }).execute()
