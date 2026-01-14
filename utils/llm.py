@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=settings.openai_api_key)
 
-MODEL_NAME = "gpt-4o-mini"
+MODEL_NAME = "gpt-5-2025-08-07"
 
 def classify_message(text: str) -> str:
     """

@@ -9,8 +9,8 @@ Information about the user's *identity, self, brand, or communication preference
 *   **Examples:** "I am a founder", "I'm 30 years old", "joo my writing style is all small caps", "I don't use emojis", "My goal is to reach 1M users", "I want to write small caps only".
 
 **2. 'fact'**
-Specific statements about the user's life, events, interests, or actions that do not fit the core 'persona' fields but are still relevant user context.
-*   **Examples:** "I went to Slush and closed 5 deals", "I just found out that kitesurfing is fun", "I love dinosaurs", "I'm traveling to Berlin next week".
+Specific statements about the user's life, events, interests, actions, opinions, or preferences that do not fit the core 'persona' fields but are still relevant user context.
+*   **Examples:** "I went to Slush and closed 5 deals", "I just found out that kitesurfing is fun", "I love dinosaurs", "I'm traveling to Berlin next week", "I really hate consultants", "I prefer working remotely", "I think AI will change everything".
 
 **3. 'neither'**
 Conversational fillers, pure greetings, questions about the bot, or unclear statements.
