@@ -21,6 +21,7 @@ def mock_db_functions():
          patch("workers.jobs.get_publyc_persona") as mock_get_persona, \
          patch("workers.jobs.update_publyc_persona_field") as mock_update_persona, \
          patch("workers.jobs.send_presence") as mock_presence, \
+         patch("workers.database.update_message_content") as mock_update_msg, \
          patch("workers.jobs.send_whatsapp_message") as mock_whatsapp:
         
         mock_sub.return_value = "active"
@@ -31,7 +32,8 @@ def mock_db_functions():
             "insert": mock_insert,
             "get_persona": mock_get_persona,
             "update_persona": mock_update_persona,
-            "presence": mock_presence
+            "presence": mock_presence,
+            "update_msg": mock_update_msg
         }
 
 # Mock OpenAI via utils.llm
@@ -63,9 +65,18 @@ def test_persona_classification_only(mock_db_functions, mock_llm, mock_settings)
     # Verify classification called
     mock_llm["classify"].assert_called_with("I visited Paris last year.")
     
-    # Verify DB insertion has flags
-    args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["flags"] == {"classification": "fact"}
+    # Verify DB update has flags
+    mock_db_functions["update_msg"].assert_called()
+    # The call arg is tricky because positional args might be passed.
+    # Signature: update_message_content(message_id, content=None, media_url=None, extracted_media_content=None, flags=None)
+    # The code likely calls it with positional args now for some, but flags is likely keyword or last positional.
+    # We should verify the 'flags' argument specifically.
+    call_args = mock_db_functions["update_msg"].call_args
+    # call_args.kwargs should have 'flags' if passed by keyword, or we check position 5.
+    # But let's check if 'flags' is in kwargs or last arg.
+    # Actually, in jobs.py: update_message_content(message_db_id, final_content, media_url, extracted_media_content, flags) -> passed as positional
+    args = call_args.args
+    assert args[4] == {"classification": "fact", "fact_memory": "stored"}
     
     # Verify NO persona fetching/update
     mock_db_functions["get_persona"].assert_not_called()
@@ -88,8 +99,13 @@ def test_personal_fact_classification(mock_db_functions, mock_llm, mock_settings
     process_whatsapp_message(message_data)
 
     mock_llm["classify"].assert_called_with("I love dinosaurs")
-    args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["flags"] == {"classification": "fact"}
+    mock_llm["classify"].assert_called_with("I love dinosaurs")
+    
+    # Verify DB update has flags
+    call_args = mock_db_functions["update_msg"].call_args
+    args = call_args.args
+    # Expect flags at 5th position (index 4)
+    assert args[4] == {"classification": "fact", "fact_memory": "stored"}
 
 def test_persona_update_flow(mock_db_functions, mock_llm, mock_settings):
     """Test full persona update flow."""
@@ -117,9 +133,11 @@ def test_persona_update_flow(mock_db_functions, mock_llm, mock_settings):
     # Verify DB update called
     mock_db_functions["update_persona"].assert_called_with("user-123", "business_goals", "new goal")
     
-    # Verify DB insertion includes update info
-    args, _ = mock_db_functions["insert"].call_args
-    flags = args[0]["flags"]
+    # Verify DB update includes update info
+    call_args = mock_db_functions["update_msg"].call_args
+    args = call_args.args
+    flags = args[4]
+    
     assert flags["classification"] == "persona"
     assert flags["persona_update"] == {"field": "business_goals", "value": "new goal"}
 
@@ -160,9 +178,11 @@ def test_persona_classification_with_fillers(mock_db_functions, mock_llm, mock_s
     # Verify classification called
     mock_llm["classify"].assert_called_with("joo my writing style is all small caps")
     
-    # Verify DB insertion has flags
-    args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["flags"]["classification"] == "persona"
+    # Verify DB updated with flags
+    call_args = mock_db_functions["update_msg"].call_args
+    args = call_args.args
+    flags = args[4]
+    assert flags["classification"] == "persona"
     # Since we are mocking get_persona to return something (default mock behavior),
     # the code proceeds to update. We just check classification here is correct.
 
@@ -188,8 +208,12 @@ def test_various_fact_examples(mock_db_functions, mock_llm, mock_settings, messa
     process_whatsapp_message(message_data)
 
     mock_llm["classify"].assert_called_with(message_text)
-    args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["flags"] == {"classification": "fact"}
+    mock_llm["classify"].assert_called_with(message_text)
+    
+    # Verify DB update
+    call_args = mock_db_functions["update_msg"].call_args
+    args = call_args.args
+    assert args[4] == {"classification": "fact", "fact_memory": "stored"}
 
 @pytest.mark.parametrize("message_text", [
     "I am an indie hacker building in public",
@@ -214,8 +238,8 @@ def test_various_persona_examples(mock_db_functions, mock_llm, mock_settings, me
     process_whatsapp_message(message_data)
 
     mock_llm["classify"].assert_called_with(message_text)
-    args, _ = mock_db_functions["insert"].call_args
-    assert args[0]["flags"]["classification"] == "persona"
+    args, _ = mock_db_functions["update_msg"].call_args
+    assert args[4]["classification"] == "persona"
 
 def test_real_persona_update_flow(mock_db_functions, mock_llm, mock_settings):
     """Test persona update with a complex real-world profile (fixture)."""
