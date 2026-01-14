@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=settings.openai_api_key)
 
-MODEL_NAME = "gpt-5-mini-2025-08-07"
+MODEL_NAME = "gpt-4o-mini"
 
 def classify_message(text: str) -> str:
     """
@@ -139,15 +139,28 @@ def summarize_fact(text: str) -> str:
     """
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-5-mini-2025-08-07", # Use user-requested cheaper model
+            model="gpt-4o-mini", # Proven to work for extraction
             messages=[
                 {
-                    "role": "system", 
-                    "content": "Extract the core factual claim from the user's message. Return ONLY the fact as a concise 3rd person statement. Example: 'I ran a marathon' -> 'User ran a marathon'. If the message is unclear or you cannot extract a fact, return the original message exactly."
-                },
-                {"role": "user", "content": text}
+                    "role": "user", 
+                    "content": (
+                        "Task: Extract the core fact from the user's message as a concise third-person statement.\n"
+                        "Constraints:\n"
+                        "1. Always start with 'User'.\n"
+                        "2. specific facts only, no fluff.\n"
+                        "3. NEVER return the first-person 'I' message.\n\n"
+                        "Examples:\n"
+                        "Input: I just ran a marathon in 3 hours\nOutput: User ran a marathon in 3 hours\n"
+                        "Input: i hate spinach\nOutput: User hates spinach\n"
+                        "Input: My favorite book is The Mom Test\nOutput: User's favorite book is 'The Mom Test'\n"
+                        "Input: I'm learning Rust this weekend\nOutput: User is learning Rust\n"
+                        "Input: We closed a $50k deal yesterday\nOutput: User's company closed a $50k deal\n"
+                        "Input: I have a dog named Rex\nOutput: User has a dog named Rex\n\n"
+                        f"Input: {text}\nOutput:"
+                    )
+                }
             ],
-            max_completion_tokens=50
+            max_completion_tokens=100
         )
         content = response.choices[0].message.content.strip()
         return content if content else text # Fallback if empty
