@@ -30,7 +30,7 @@ supadata_client = Supadata(api_key=settings.supadata_api_key)
 YOUTUBE_REGEX = r"(?:https?://)?(?:www\.)?(?:youtube\.com|youtu\.be)/(?:watch\?v=|shorts/|embed/)?([a-zA-Z0-9_-]{11})"
 
 # Generic URL Regex (simple version to catch most links)
-URL_REGEX = r"(?:https?://)?(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+URL_REGEX = r"(?:https?://|www\.)[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
 
 # Domains to exclude from generic crawler (YouTube has its own handler)
 EXCLUDED_DOMAINS = ["twitter.com", "x.com", "linkedin.com", "tiktok.com", "facebook.com", "instagram.com"]
