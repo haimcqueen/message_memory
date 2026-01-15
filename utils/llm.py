@@ -33,7 +33,7 @@ def classify_message(text: str) -> str:
                 {"role": "user", "content": text}
             ],
             # temperature=0,  # Not supported by gpt-5-nano
-            max_completion_tokens=256
+            max_completion_tokens=2048
         )
         result = response.choices[0].message.content.strip().lower()
         if result not in ["fact", "persona", "neither"]:
@@ -162,7 +162,7 @@ def summarize_fact(text: str) -> str:
                     )
                 }
             ],
-            max_completion_tokens=100
+            max_completion_tokens=2048
         )
         content = response.choices[0].message.content.strip()
         return content if content else text # Fallback if empty
